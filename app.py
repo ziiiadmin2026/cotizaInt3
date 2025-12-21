@@ -165,15 +165,44 @@ def clientes():
                 'message': f'Error al crear cliente: {str(e)}'
             }), 400
 
-@app.route('/api/clientes/<int:cliente_id>', methods=['GET'])
+@app.route('/api/clientes/<int:cliente_id>', methods=['GET', 'PUT'])
 def obtener_cliente(cliente_id):
-    """Obtener un cliente específico"""
-    cliente = db.obtener_cliente(cliente_id)
+    """Obtener o actualizar un cliente específico"""
+    if request.method == 'GET':
+        cliente = db.obtener_cliente(cliente_id)
+        
+        if cliente:
+            return jsonify(cliente)
+        else:
+            return jsonify({'error': 'Cliente no encontrado'}), 404
     
-    if cliente:
-        return jsonify(cliente)
-    else:
-        return jsonify({'error': 'Cliente no encontrado'}), 404
+    elif request.method == 'PUT':
+        try:
+            data = request.get_json()
+            resultado = db.actualizar_cliente(
+                cliente_id,
+                nombre=data.get('nombre'),
+                email=data.get('email'),
+                telefono=data.get('telefono'),
+                direccion=data.get('direccion'),
+                rfc=data.get('rfc')
+            )
+            
+            if resultado:
+                return jsonify({
+                    'success': True,
+                    'message': 'Cliente actualizado correctamente'
+                })
+            else:
+                return jsonify({
+                    'success': False,
+                    'message': 'No se pudo actualizar el cliente'
+                }), 400
+        except Exception as e:
+            return jsonify({
+                'success': False,
+                'message': f'Error: {str(e)}'
+            }), 400
 
 @app.route('/api/cotizaciones', methods=['GET', 'POST'])
 @login_required
