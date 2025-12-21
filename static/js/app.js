@@ -154,6 +154,8 @@ function mostrarFormularioCliente() {
 function ocultarFormularioCliente() {
     document.getElementById('form-cliente').style.display = 'none';
     document.getElementById('cliente-form').reset();
+    delete document.getElementById('cliente-form').dataset.clienteId;
+    document.querySelector('#form-cliente h3').textContent = 'Nuevo Cliente';
 }
 
 async function cargarClientes() {
@@ -174,6 +176,9 @@ async function cargarClientes() {
                 <td>${cliente.email}</td>
                 <td>${cliente.telefono || 'N/A'}</td>
                 <td>${cliente.rfc || 'N/A'}</td>
+                <td>
+                    <button class="btn btn-small btn-primary" onclick="editarCliente(${cliente.id})">Editar</button>
+                </td>
             </tr>
         `).join('');
         
@@ -183,9 +188,37 @@ async function cargarClientes() {
     }
 }
 
+async function editarCliente(clienteId) {
+    try {
+        const response = await fetch(`/api/clientes/${clienteId}`);
+        const cliente = await response.json();
+        
+        // Cambiar título del formulario
+        document.querySelector('#form-cliente h3').textContent = 'Editar Cliente';
+        
+        // Llenar formulario con datos del cliente
+        document.getElementById('cliente-nombre').value = cliente.nombre;
+        document.getElementById('cliente-email').value = cliente.email;
+        document.getElementById('cliente-telefono').value = cliente.telefono || '';
+        document.getElementById('cliente-direccion').value = cliente.direccion || '';
+        document.getElementById('cliente-rfc').value = cliente.rfc || '';
+        
+        // Guardar ID del cliente en el formulario
+        document.getElementById('cliente-form').dataset.clienteId = clienteId;
+        
+        // Mostrar formulario
+        document.getElementById('form-cliente').style.display = 'block';
+        
+    } catch (error) {
+        console.error('Error al cargar cliente:', error);
+        showNotification('Error al cargar cliente', 'error');
+    }
+}
+
 async function crearCliente(e) {
     e.preventDefault();
     
+    const clienteId = e.target.dataset.clienteId;
     const clienteData = {
         nombre: document.getElementById('cliente-nombre').value,
         email: document.getElementById('cliente-email').value,
@@ -195,16 +228,27 @@ async function crearCliente(e) {
     };
     
     try {
-        const response = await fetch('/api/clientes', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(clienteData)
-        });
+        let response;
+        if (clienteId) {
+            // Actualizar cliente existente
+            response = await fetch(`/api/clientes/${clienteId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(clienteData)
+            });
+        } else {
+            // Crear nuevo cliente
+            response = await fetch('/api/clientes', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(clienteData)
+            });
+        }
         
         const result = await response.json();
         
         if (result.success) {
-            showNotification('Cliente creado exitosamente', 'success');
+            showNotification(clienteId ? 'Cliente actualizado exitosamente' : 'Cliente creado exitosamente', 'success');
             ocultarFormularioCliente();
             cargarClientes();
         } else {
@@ -212,8 +256,8 @@ async function crearCliente(e) {
         }
         
     } catch (error) {
-        console.error('Error al crear cliente:', error);
-        showNotification('Error al crear cliente', 'error');
+        console.error('Error al guardar cliente:', error);
+        showNotification('Error al guardar cliente', 'error');
     }
 }
 
