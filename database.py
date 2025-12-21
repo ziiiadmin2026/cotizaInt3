@@ -150,6 +150,23 @@ class Database:
         
         return cliente_id
     
+    def actualizar_cliente(self, cliente_id, nombre, email, telefono='', direccion='', rfc=''):
+        """Actualizar un cliente existente"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+            UPDATE clientes 
+            SET nombre = ?, email = ?, telefono = ?, direccion = ?, rfc = ?
+            WHERE id = ?
+        ''', (nombre, email, telefono, direccion, rfc, cliente_id))
+        
+        conn.commit()
+        affected = cursor.rowcount
+        conn.close()
+        
+        return affected > 0
+    
     def obtener_clientes(self):
         """Obtener todos los clientes"""
         conn = self.get_connection()
