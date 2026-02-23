@@ -29,15 +29,25 @@ instance/
 
 # Environment
 .env
-.venv
+.env.local
+.env.production
 
 # Database
 *.db
 *.sqlite
+data/
 
 # PDFs generados
 pdfs/
 exports/
+
+# Uploads de usuarios (imágenes de productos, adjuntos de cotizaciones)
+uploads/
+!uploads/README.md
+
+# Logs
+logs/
+*.log
 
 # IDE
 .vscode/
@@ -49,3 +59,25 @@ exports/
 # OS
 .DS_Store
 Thumbs.db
+Desktop.ini
+
+# Docker (opcional - descomentar si no quieres versionar)
+# Dockerfile
+# docker-compose.yml
+# .dockerignore
+
+# SSL Certificates
+ssl/
+*.pem
+*.key
+*.crt
+
+# Backups
+backups/
+*.backup
+*.bak
+
+# Tests temporales (opcional)
+# test_*.py
+# debug_*.py
+

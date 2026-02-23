@@ -3,6 +3,8 @@ from flask_cors import CORS
 from functools import wraps
 import os
 from datetime import datetime
+from uuid import uuid4
+from werkzeug.utils import secure_filename
 from database import Database
 from pdf_generator import PDFGenerator
 from email_sender import EmailSender
@@ -11,12 +13,30 @@ from config import Config
 app = Flask(__name__)
 app.config.from_object(Config)
 app.secret_key = os.environ.get('SECRET_KEY', 'dev-secret-key-integrational3-2025')
+app.config['MAX_CONTENT_LENGTH'] = Config.MAX_CONTENT_LENGTH
 CORS(app)
 
 # Inicializar servicios
 db = Database()
 pdf_gen = PDFGenerator()
 email_sender = EmailSender()
+
+# Asegurar directorios
+os.makedirs(Config.UPLOAD_FOLDER, exist_ok=True)
+os.makedirs(os.path.join(Config.UPLOAD_FOLDER, 'productos'), exist_ok=True)
+
+def _allowed_attachment(filename):
+    if not filename or '.' not in filename:
+        return False
+    ext = filename.rsplit('.', 1)[1].lower()
+    return ext in Config.ALLOWED_ATTACHMENT_EXTENSIONS
+
+def _allowed_image(filename):
+    """Verificar si es una imagen permitida"""
+    if not filename or '.' not in filename:
+        return False
+    ext = filename.rsplit('.', 1)[1].lower()
+    return ext in {'png', 'jpg', 'jpeg', 'gif', 'webp'}
 
 # Decorador para proteger rutas
 def login_required(f):
@@ -224,7 +244,8 @@ def cotizaciones():
                 fecha_validez=data.get('fecha_validez'),
                 notas=data.get('notas', ''),
                 condiciones_comerciales=data.get('condiciones_comerciales', ''),
-                iva_porcentaje=data.get('iva_porcentaje', 16)
+                iva_porcentaje=data.get('iva_porcentaje', 16),
+                creado_por=session.get('user_id')  # Agregar usuario que crea la cotización
             )
             
             return jsonify({
@@ -278,6 +299,92 @@ def obtener_cotizacion(cotizacion_id):
                 'message': f'Error al actualizar cotización: {str(e)}'
             }), 400
 
+@app.route('/api/cotizaciones/<int:cotizacion_id>/adjuntos', methods=['POST'])
+@login_required
+def subir_adjuntos(cotizacion_id):
+    """Subir adjuntos para una cotización"""
+    cotizacion = db.obtener_cotizacion(cotizacion_id)
+    if not cotizacion:
+        return jsonify({'success': False, 'message': 'Cotización no encontrada'}), 404
+
+    archivos = request.files.getlist('archivos')
+    if not archivos:
+        return jsonify({'success': False, 'message': 'No se recibieron archivos'}), 400
+
+    archivos_validos = [a for a in archivos if a and a.filename]
+    if not archivos_validos:
+        return jsonify({'success': False, 'message': 'No se recibieron archivos válidos'}), 400
+
+    if len(archivos_validos) > Config.MAX_ATTACHMENTS:
+        return jsonify({
+            'success': False,
+            'message': f'Se permiten máximo {Config.MAX_ATTACHMENTS} archivos por cotización'
+        }), 400
+
+    cotizacion_dir = os.path.join(Config.UPLOAD_FOLDER, f"cotizacion_{cotizacion_id}")
+    os.makedirs(cotizacion_dir, exist_ok=True)
+
+    adjuntos_data = []
+    saved_paths = []
+    total_bytes = 0
+
+    try:
+        for archivo in archivos_validos:
+            if not _allowed_attachment(archivo.filename):
+                raise ValueError('Tipo de archivo no permitido')
+
+            safe_name = secure_filename(archivo.filename)
+            stored_name = f"{uuid4().hex}_{safe_name}"
+            file_path = os.path.join(cotizacion_dir, stored_name)
+
+            archivo.save(file_path)
+            saved_paths.append(file_path)
+
+            size = os.path.getsize(file_path)
+            total_bytes += size
+
+            if size > Config.MAX_ATTACHMENT_MB * 1024 * 1024:
+                raise ValueError('Archivo excede el tamaño permitido')
+
+            if total_bytes > Config.MAX_TOTAL_ATTACH_MB * 1024 * 1024:
+                raise ValueError('Tamaño total de adjuntos excedido')
+
+            adjuntos_data.append({
+                'nombre_original': archivo.filename,
+                'nombre_archivo': stored_name,
+                'ruta_archivo': file_path,
+                'mime_tipo': archivo.mimetype,
+                'tamano_bytes': size
+            })
+
+        db.agregar_adjuntos(cotizacion_id, adjuntos_data)
+
+        return jsonify({
+            'success': True,
+            'message': f'Adjuntos guardados: {len(adjuntos_data)}'
+        }), 201
+
+    except ValueError as e:
+        for path in saved_paths:
+            try:
+                os.remove(path)
+            except OSError:
+                pass
+        return jsonify({
+            'success': False,
+            'message': str(e)
+        }), 400
+    except Exception as e:
+        for path in saved_paths:
+            try:
+                os.remove(path)
+            except OSError:
+                pass
+        return jsonify({
+            'success': False,
+            'message': f'Error al subir adjuntos: {str(e)}'
+        }), 500
+
 @app.route('/api/cotizaciones/<int:cotizacion_id>/pdf', methods=['GET'])
 @login_required
 def generar_pdf(cotizacion_id):
@@ -330,6 +437,8 @@ def enviar_email(cotizacion_id):
         # Generar PDF
         pdf_path = pdf_gen.generar_cotizacion_pdf(cotizacion)
         print(f"[API] PDF generado: {pdf_path}")
+
+        adjuntos = db.obtener_adjuntos(cotizacion_id)
         
         # Obtener emails de destinatarios (puede ser uno o varios)
         emails = data.get('emails', [])
@@ -354,7 +463,12 @@ def enviar_email(cotizacion_id):
         fallidos = 0
         
         for destinatario in emails:
-            resultado = email_sender.enviar_cotizacion_email(destinatario, cotizacion, pdf_path)
+            resultado = email_sender.enviar_cotizacion_email(
+                destinatario,
+                cotizacion,
+                pdf_path,
+                adjuntos=adjuntos
+            )
             if isinstance(resultado, tuple):
                 success, _ = resultado
                 if success:
@@ -555,6 +669,57 @@ def productos_page():
     """Página de gestión de productos"""
     return render_template('productos.html')
 
+@app.route('/test-upload')
+@login_required
+def test_upload_page():
+    """Página de prueba para subida de imágenes"""
+    return render_template('test_upload.html')
+
+@app.route('/api/productos/upload-imagen', methods=['POST'])
+@login_required
+def upload_imagen_producto():
+    """Subir imagen de producto"""
+    if 'imagen' not in request.files:
+        return jsonify({'success': False, 'message': 'No se recibió archivo'}), 400
+    
+    archivo = request.files['imagen']
+    if not archivo or not archivo.filename:
+        return jsonify({'success': False, 'message': 'Archivo inválido'}), 400
+    
+    if not _allowed_image(archivo.filename):
+        return jsonify({'success': False, 'message': 'Tipo de archivo no permitido. Use PNG, JPG, JPEG, GIF o WEBP'}), 400
+    
+    try:
+        # Generar nombre único
+        safe_name = secure_filename(archivo.filename)
+        ext = safe_name.rsplit('.', 1)[1].lower()
+        unique_name = f"{uuid4().hex}.{ext}"
+        
+        # Guardar en directorio de productos
+        productos_dir = os.path.join(Config.UPLOAD_FOLDER, 'productos')
+        file_path = os.path.join(productos_dir, unique_name)
+        archivo.save(file_path)
+        
+        # Retornar ruta relativa para guardar en BD
+        relative_path = f"/uploads/productos/{unique_name}"
+        
+        return jsonify({
+            'success': True,
+            'url': relative_path,
+            'filename': unique_name
+        })
+    
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'message': f'Error al subir imagen: {str(e)}'
+        }), 500
+
+@app.route('/uploads/<path:filename>')
+def serve_upload(filename):
+    """Servir archivos subidos"""
+    return send_file(os.path.join(Config.UPLOAD_FOLDER, filename))
+
 @app.route('/api/productos', methods=['GET', 'POST'])
 @login_required
 def api_productos():
@@ -577,7 +742,8 @@ def api_productos():
                 tipo=data['tipo'],
                 precio=float(data['precio']),
                 unidad=data.get('unidad', 'pza'),
-                categoria=data.get('categoria', '')
+                categoria=data.get('categoria', ''),
+                imagen_url=data.get('imagen_url')
             )
             
             if producto_id:
@@ -621,7 +787,8 @@ def api_producto(producto_id):
                 precio=float(data['precio']) if 'precio' in data else None,
                 unidad=data.get('unidad'),
                 categoria=data.get('categoria'),
-                activo=data.get('activo')
+                activo=data.get('activo'),
+                imagen_url=data.get('imagen_url')
             )
             
             if resultado:

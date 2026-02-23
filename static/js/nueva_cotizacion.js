@@ -1,12 +1,18 @@
 // Funciones necesarias para nueva cotización
-let productos = [];
-let itemCounter = 0;
-let inactividadTimer = null;
-let cotizacionEditando = null; // ID de cotización en edición
-const TIEMPO_INACTIVIDAD = 5 * 60 * 1000; // 5 minutos
+let productosCotizacion = [];
+let itemCounterCotizacion = 0;
+let inactividadTimerCotizacion = null;
+let cotizacionEditandoLocal = null; // ID de cotización en edición
+const TIEMPO_INACTIVIDAD_COTIZACION = 5 * 60 * 1000; // 5 minutos
+let cotizacionJsInicializado = false;
 
-// Inicialización
+// Inicialización (solo si estamos en la página dedicada de nueva cotización)
 window.addEventListener('DOMContentLoaded', async () => {
+    // Solo inicializar si estamos en la página /nueva-cotizacion
+    if (!window.location.pathname.includes('/nueva-cotizacion')) {
+        return; // Salir si estamos en el modal de index.html
+    }
+    
     try {
         const response = await fetch('/api/session');
         const data = await response.json();
@@ -17,18 +23,40 @@ window.addEventListener('DOMContentLoaded', async () => {
         }
         
         // Actualizar nombre de usuario
-        document.getElementById('nombreUsuario').textContent = data.usuario.nombre_completo;
+        if (document.getElementById('nombreUsuario')) {
+            document.getElementById('nombreUsuario').textContent = data.usuario.nombre_completo;
+        }
         
         // Cargar datos
         await cargarProductos();
         await cargarClientesSelect();
         
         // Event listeners
-        document.getElementById('cotizacion-form').addEventListener('submit', crearCotizacion);
-        const formProdRapido = document.getElementById('productoRapidoForm');
+        const formCotizacion = document.getElementById('cotizacion-form');
+        if (formCotizacion && !cotizacionJsInicializado) {
+            formCotizacion.addEventListener('submit', crearCotizacion);
+            cotizacionJsInicializado = true;
+        }
+        
+        const adjuntosInput = document.getElementById('cotizacion-adjuntos');
+        if (adjuntosInput) {
+            adjuntosInput.addEventListener('change', renderAdjuntosSeleccionados);
+        }
+        const formProdRapido = document.getElementById('form-producto-rapido');
         if (formProdRapido) {
             formProdRapido.addEventListener('submit', crearProductoRapido);
         }
+        
+        // Protección del modal de producto rápido - NO permitir cierre con ESC
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                const modalProducto = document.getElementById('modal-producto-rapido');
+                if (modalProducto && modalProducto.style.display === 'flex') {
+                    e.preventDefault();
+                    e.stopPropagation();
+                }
+            }
+        });
         
         // Verificar si se está editando una cotización
         const urlParams = new URLSearchParams(window.location.search);
@@ -60,10 +88,10 @@ function iniciarTemporizadorInactividad() {
 }
 
 function resetearTemporizador() {
-    if (inactividadTimer) {
-        clearTimeout(inactividadTimer);
+    if (inactividadTimerCotizacion) {
+        clearTimeout(inactividadTimerCotizacion);
     }
-    inactividadTimer = setTimeout(async () => {
+    inactividadTimerCotizacion = setTimeout(async () => {
         alert('Sesión cerrada por inactividad');
         try {
             await fetch('/api/logout', { method: 'POST' });
@@ -71,7 +99,7 @@ function resetearTemporizador() {
             console.error('Error:', error);
         }
         window.location.href = '/login';
-    }, TIEMPO_INACTIVIDAD);
+    }, TIEMPO_INACTIVIDAD_COTIZACION);
 }
 
 // Función para volver al inicio
@@ -84,7 +112,7 @@ function volverAlInicio() {
 async function cargarProductos() {
     try {
         const response = await fetch('/api/productos');
-        productos = await response.json();
+        productosCotizacion = await response.json();
     } catch (error) {
         console.error('Error al cargar productos:', error);
     }
@@ -110,19 +138,19 @@ async function cargarClientesSelect() {
 }
 
 function agregarItem() {
-    itemCounter++;
+    itemCounterCotizacion++;
     const container = document.getElementById('items-container');
     
     const itemDiv = document.createElement('div');
     itemDiv.className = 'item-row';
-    itemDiv.id = `item-${itemCounter}`;
+    itemDiv.id = `item-${itemCounterCotizacion}`;
     itemDiv.innerHTML = `
         <div class="item-grid">
             <div class="form-group">
                 <label>Producto/Servicio</label>
-                <select class="item-producto" onchange="actualizarPrecioItem(${itemCounter})">
+                <select class="item-producto" onchange="actualizarPrecioItem(${itemCounterCotizacion})">
                     <option value="">Seleccione...</option>
-                    ${productos.map(p => `<option value="${p.id}" data-precio="${p.precio}">${p.nombre}</option>`).join('')}
+                    ${productosCotizacion.map(p => `<option value="${p.id}" data-precio="${p.precio}">${p.nombre}</option>`).join('')}
                 </select>
             </div>
             <div class="form-group">
@@ -138,10 +166,10 @@ function agregarItem() {
                 <input type="number" class="item-precio" step="0.01" min="0" oninput="calcularTotales()">
             </div>
             <div class="form-group">
-                <button type="button" class="btn btn-success" onclick="abrirModalProductoRapido(${itemCounter})" style="white-space: nowrap;">Nuevo</button>
+                <button type="button" class="btn btn-success" onclick="abrirModalProductoRapido(${itemCounterCotizacion})" style="white-space: nowrap;">Nuevo</button>
             </div>
             <div class="form-group">
-                <button type="button" class="btn btn-danger btn-sm" onclick="eliminarItem(${itemCounter})">Eliminar</button>
+                <button type="button" class="btn btn-danger btn-sm" onclick="eliminarItem(${itemCounterCotizacion})">Eliminar</button>
             </div>
         </div>
     `;
@@ -168,7 +196,7 @@ function actualizarPrecioItem(itemId) {
         itemDiv.querySelector('.item-precio').value = precio;
         
         const productoId = select.value;
-        const producto = productos.find(p => p.id == productoId);
+        const producto = productosCotizacion.find(p => p.id == productoId);
         if (producto && producto.descripcion) {
             itemDiv.querySelector('.item-descripcion').value = producto.descripcion;
         }
@@ -197,6 +225,8 @@ function calcularTotales() {
 
 async function crearCotizacion(e) {
     e.preventDefault();
+
+    const esEdicion = Boolean(cotizacionEditandoLocal);
     
     const items = [];
     document.querySelectorAll('.item-row').forEach(itemDiv => {
@@ -230,9 +260,9 @@ async function crearCotizacion(e) {
     
     try {
         let response;
-        if (cotizacionEditando) {
+        if (esEdicion) {
             // Actualizar cotización existente
-            response = await fetch(`/api/cotizaciones/${cotizacionEditando}`, {
+            response = await fetch(`/api/cotizaciones/${cotizacionEditandoLocal}`, {
                 method: 'PUT',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify(data)
@@ -247,9 +277,53 @@ async function crearCotizacion(e) {
         }
         
         if (response.ok) {
-            alert(cotizacionEditando ? 'Cotización actualizada exitosamente' : 'Cotización creada exitosamente');
-            // Redirigir al índice
-            setTimeout(() => window.location.href = '/', 1000);
+            const result = await response.json();
+            const cotizacionId = cotizacionEditandoLocal || result.cotizacion_id;
+
+            if (!cotizacionEditandoLocal) {
+                cotizacionEditandoLocal = cotizacionId;
+            }
+
+            const adjuntosResult = await subirAdjuntos(cotizacionId);
+            if (!adjuntosResult.success) {
+                alert(`Adjuntos: ${adjuntosResult.message}`);
+                if (!esEdicion) {
+                    await cargarCotizacionParaEditar(cotizacionId);
+                }
+                return;
+            }
+
+            // Detectar si estamos en modal o página dedicada
+            const modalNuevaCot = document.getElementById('modalNuevaCotizacion');
+            const esModal = modalNuevaCot && modalNuevaCot.style.display !== 'none';
+            
+            if (esModal) {
+                // Estamos en el modal dentro de index.html
+                if (typeof showNotification === 'function') {
+                    showNotification(esEdicion ? 'Cotización actualizada exitosamente' : 'Cotización creada exitosamente', 'success');
+                } else {
+                    alert(esEdicion ? 'Cotización actualizada exitosamente' : 'Cotización creada exitosamente');
+                }
+                
+                // Cerrar modal
+                if (typeof cerrarModalNuevaCotizacion === 'function') {
+                    cerrarModalNuevaCotizacion();
+                }
+                
+                // Recargar cotizaciones si la función existe
+                if (typeof cargarCotizaciones === 'function') {
+                    await cargarCotizaciones();
+                }
+                
+                // Cambiar a la pestaña de cotizaciones
+                if (typeof showTab === 'function') {
+                    showTab('cotizaciones');
+                }
+            } else {
+                // Estamos en la página dedicada /nueva-cotizacion
+                alert(esEdicion ? 'Cotización actualizada exitosamente' : 'Cotización creada exitosamente');
+                setTimeout(() => window.location.href = '/', 1000);
+            }
         } else {
             const error = await response.json();
             alert('Error: ' + (error.message || 'Error al procesar cotización'));
@@ -261,24 +335,71 @@ async function crearCotizacion(e) {
 }
 
 function abrirModalProductoRapido(itemId) {
-    document.getElementById('itemIndexProducto').value = itemId;
-    document.getElementById('modalProductoRapido').style.display = 'flex';
+    // Guardar el ID del item para usarlo después
+    document.getElementById('prod-item-id').value = itemId;
+    document.getElementById('modal-producto-rapido').style.display = 'flex';
+    
+    // Limpiar formulario
+    document.getElementById('form-producto-rapido').reset();
+    // Establecer valores por defecto
+    document.getElementById('prod-activo').value = '1';
+    document.getElementById('prod-tipo').value = 'producto';
+    document.getElementById('prod-unidad').value = 'pza';
+    
+    // Limpiar preview de imagen
+    const preview = document.getElementById('prod-imagen-preview');
+    if (preview) {
+        preview.innerHTML = '<span class="imagen-preview-text-rapido">Sin imagen</span>';
+    }
+    
+    // Agregar listener para URL de imagen si no existe
+    const imagenUrlInput = document.getElementById('prod-imagen-url');
+    if (imagenUrlInput && !imagenUrlInput.hasAttribute('data-listener-added')) {
+        imagenUrlInput.addEventListener('input', function() {
+            actualizarPreviewImagenRapido(this.value);
+        });
+        imagenUrlInput.setAttribute('data-listener-added', 'true');
+    }
+    
 }
 
 function cerrarModalProductoRapido() {
-    document.getElementById('modalProductoRapido').style.display = 'none';
-    document.getElementById('productoRapidoForm').reset();
+    document.getElementById('modal-producto-rapido').style.display = 'none';
+    document.getElementById('form-producto-rapido').reset();
+    
+    // Limpiar preview de imagen
+    const preview = document.getElementById('prod-imagen-preview');
+    if (preview) {
+        preview.innerHTML = '<span class="imagen-preview-text-rapido">Sin imagen</span>';
+    }
+    
+    // Limpiar input de archivo de imagen
+    const fileInput = document.getElementById('prod-imagen-file');
+    if (fileInput) {
+        fileInput.value = '';
+    }
 }
 
 async function crearProductoRapido(e) {
     e.preventDefault();
     
     const data = {
-        nombre: document.getElementById('productoRapidoNombre').value,
-        descripcion: document.getElementById('productoRapidoDescripcion').value,
-        precio: parseFloat(document.getElementById('productoRapidoPrecio').value),
-        categoria: document.getElementById('productoRapidoCategoria').value
+        codigo: document.getElementById('prod-codigo').value.trim(),
+        tipo: document.getElementById('prod-tipo').value,
+        nombre: document.getElementById('prod-nombre').value.trim(),
+        descripcion: document.getElementById('prod-descripcion').value.trim(),
+        precio: parseFloat(document.getElementById('prod-precio').value),
+        unidad: document.getElementById('prod-unidad').value,
+        categoria: document.getElementById('prod-categoria').value.trim(),
+        activo: parseInt(document.getElementById('prod-activo').value),
+        imagen_url: document.getElementById('prod-imagen-url').value.trim() || null
     };
+    
+    // Validar datos
+    if (!data.codigo || !data.nombre || !data.precio) {
+        alert('Por favor completa todos los campos obligatorios');
+        return;
+    }
     
     try {
         const response = await fetch('/api/productos', {
@@ -287,32 +408,140 @@ async function crearProductoRapido(e) {
             body: JSON.stringify(data)
         });
         
-        if (response.ok) {
+        const result = await response.json();
+        
+        if (response.ok && result.success) {
+            // Recargar productos
             await cargarProductos();
             
-            const itemId = document.getElementById('itemIndexProducto').value;
-            const itemDiv = document.getElementById(`item-${itemId}`);
-            const select = itemDiv.querySelector('.item-producto');
+            // Obtener el item ID para actualizar el select
+            const itemId = document.getElementById('prod-item-id').value;
+            if (itemId) {
+                const itemDiv = document.getElementById(`item-${itemId}`);
+                if (itemDiv) {
+                    const select = itemDiv.querySelector('.item-producto');
+                    
+                    // Agregar el nuevo producto al select y seleccionarlo
+                    const nuevoProducto = productosCotizacion[productosCotizacion.length - 1];
+                    const option = document.createElement('option');
+                    option.value = nuevoProducto.id;
+                    option.setAttribute('data-precio', nuevoProducto.precio);
+                    option.setAttribute('data-descripcion', nuevoProducto.descripcion || '');
+                    option.textContent = `${nuevoProducto.codigo} - ${nuevoProducto.nombre}`;
+                    option.selected = true;
+                    select.appendChild(option);
+                    
+                    // Actualizar precio automáticamente
+                    actualizarPrecioItem(itemId);
+                }
+            }
             
-            const nuevoProducto = productos[productos.length - 1];
-            const option = document.createElement('option');
-            option.value = nuevoProducto.id;
-            option.setAttribute('data-precio', nuevoProducto.precio);
-            option.textContent = nuevoProducto.nombre;
-            option.selected = true;
-            select.appendChild(option);
-            
-            actualizarPrecioItem(itemId);
             cerrarModalProductoRapido();
-            alert('Producto creado exitosamente');
+            
+            // Mostrar notificación de éxito
+            mostrarNotificacion('✅ Producto creado exitosamente', 'success');
         } else {
-            alert('Error al crear producto');
+            alert(result.message || 'Error al crear producto');
         }
     } catch (error) {
         console.error('Error:', error);
-        alert('Error al crear producto');
+        alert('Error al crear producto. Por favor intenta nuevamente.');
     }
 }
+
+// Función para subir imagen local en modal de producto rápido
+async function subirImagenProductoRapido() {
+    const fileInput = document.getElementById('prod-imagen-file');
+    const file = fileInput ? fileInput.files[0] : null;
+    
+    if (!file) {
+        mostrarNotificacion('Por favor selecciona una imagen', 'warning');
+        return;
+    }
+    
+    // Validar tipo de archivo
+    const allowedTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/gif', 'image/webp'];
+    if (!allowedTypes.includes(file.type)) {
+        mostrarNotificacion('Tipo de archivo no permitido. Use PNG, JPG, JPEG, GIF o WEBP', 'error');
+        return;
+    }
+    
+    // Validar tamaño (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+        mostrarNotificacion('La imagen no debe superar 5 MB', 'error');
+        return;
+    }
+    
+    const formData = new FormData();
+    formData.append('imagen', file);
+    
+    const btnUpload = document.getElementById('btn-subir-imagen-rapido');
+    const originalText = btnUpload ? btnUpload.textContent : '';
+    
+    try {
+        if (btnUpload) {
+            btnUpload.disabled = true;
+            btnUpload.textContent = '⏳ Subiendo...';
+        }
+        
+        mostrarNotificacion('Subiendo imagen...', 'info');
+        const response = await fetch('/api/productos/upload-imagen', {
+            method: 'POST',
+            body: formData
+        });
+        
+        const data = await response.json();
+        if (data.success) {
+            document.getElementById('prod-imagen-url').value = data.url;
+            actualizarPreviewImagenRapido(data.url);
+            mostrarNotificacion('¡Imagen subida exitosamente!', 'success');
+            fileInput.value = '';
+        } else {
+            mostrarNotificacion(data.message || 'Error al subir imagen', 'error');
+        }
+    } catch (error) {
+        console.error('Error al subir imagen:', error);
+        mostrarNotificacion('Error al subir imagen', 'error');
+    } finally {
+        if (btnUpload) {
+            btnUpload.disabled = false;
+            btnUpload.textContent = originalText || '📤 Subir Imagen';
+        }
+    }
+}
+
+// Actualizar preview de imagen en modal de producto rápido
+function actualizarPreviewImagenRapido(url) {
+    const preview = document.getElementById('prod-imagen-preview');
+    
+    if (!url || url.trim() === '') {
+        preview.innerHTML = '<span class="imagen-preview-text-rapido">Sin imagen</span>';
+        return;
+    }
+    
+    // Crear elemento de imagen
+    const img = document.createElement('img');
+    img.src = url;
+    img.alt = 'Preview';
+    img.onerror = function() {
+        preview.innerHTML = '<span class="imagen-preview-text-rapido">⚠️ Error al cargar imagen</span>';
+    };
+    
+    preview.innerHTML = '';
+    preview.appendChild(img);
+}
+
+// Listener para actualizar preview cuando se cambia la URL manualmente
+document.addEventListener('DOMContentLoaded', function() {
+    // Agregar listener para cambio de URL de imagen (solo si existe el elemento)
+    const imagenUrlInput = document.getElementById('prod-imagen-url');
+    if (imagenUrlInput && !imagenUrlInput.hasAttribute('data-listener-added')) {
+        imagenUrlInput.addEventListener('input', function() {
+            actualizarPreviewImagenRapido(this.value);
+        });
+        imagenUrlInput.setAttribute('data-listener-added', 'true');
+    }
+});
 
 // Cargar cotización para editar
 async function cargarCotizacionParaEditar(cotizacionId) {
@@ -321,7 +550,7 @@ async function cargarCotizacionParaEditar(cotizacionId) {
         const cotizacion = await response.json();
         
         // Guardar ID de cotización en edición
-        cotizacionEditando = cotizacionId;
+        cotizacionEditandoLocal = cotizacionId;
         
         // Cargar datos en el formulario
         document.getElementById('cotizacion-cliente').value = cotizacion.cliente_id;
@@ -332,11 +561,13 @@ async function cargarCotizacionParaEditar(cotizacionId) {
         if (condicionesField) {
             condicionesField.value = cotizacion.condiciones_comerciales || '';
         }
+
+        renderAdjuntosExistentes(cotizacion.adjuntos || []);
         
         // Limpiar items actuales
         const container = document.getElementById('items-container');
         container.innerHTML = '';
-        itemCounter = 0;
+        itemCounterCotizacion = 0;
         
         // Cargar items de la cotización
         for (const item of cotizacion.items) {
@@ -345,7 +576,7 @@ async function cargarCotizacionParaEditar(cotizacionId) {
             // Esperar que el item se agregue al DOM
             await new Promise(resolve => setTimeout(resolve, 50));
             
-            const itemDiv = document.getElementById(`item-${itemCounter}`);
+            const itemDiv = document.getElementById(`item-${itemCounterCotizacion}`);
             if (itemDiv) {
                 const productoSelect = itemDiv.querySelector('.item-producto');
                 const conceptoInput = itemDiv.querySelector('.item-concepto');
@@ -387,5 +618,97 @@ async function cargarCotizacionParaEditar(cotizacionId) {
     } catch (error) {
         console.error('Error al cargar cotización:', error);
         alert('Error al cargar cotización: ' + error.message);
+    }
+}
+
+function renderAdjuntosExistentes(adjuntos) {
+    const contenedor = document.getElementById('adjuntos-existentes');
+    if (!contenedor) return;
+
+    contenedor.innerHTML = '';
+    if (!adjuntos.length) return;
+
+    const titulo = document.createElement('p');
+    titulo.textContent = 'Adjuntos actuales:';
+    contenedor.appendChild(titulo);
+
+    const lista = document.createElement('ul');
+    adjuntos.forEach(adjunto => {
+        const item = document.createElement('li');
+        item.textContent = adjunto.nombre_original;
+        lista.appendChild(item);
+    });
+    contenedor.appendChild(lista);
+}
+
+function renderAdjuntosSeleccionados() {
+    const input = document.getElementById('cotizacion-adjuntos');
+    const contenedor = document.getElementById('adjuntos-seleccionados');
+    if (!input || !contenedor) return;
+
+    contenedor.innerHTML = '';
+    const archivos = Array.from(input.files || []);
+    if (archivos.length === 0) return;
+
+    const titulo = document.createElement('p');
+    titulo.textContent = 'Adjuntos por subir:';
+    contenedor.appendChild(titulo);
+
+    const lista = document.createElement('ul');
+    archivos.forEach(archivo => {
+        const item = document.createElement('li');
+        item.textContent = archivo.name;
+        lista.appendChild(item);
+    });
+    contenedor.appendChild(lista);
+}
+
+async function subirAdjuntos(cotizacionId) {
+    const input = document.getElementById('cotizacion-adjuntos');
+    if (!input || !input.files || input.files.length === 0) {
+        return { success: true };
+    }
+
+    const formData = new FormData();
+    Array.from(input.files).forEach(archivo => {
+        formData.append('archivos', archivo);
+    });
+
+    try {
+        const response = await fetch(`/api/cotizaciones/${cotizacionId}/adjuntos`, {
+            method: 'POST',
+            body: formData
+        });
+
+        const result = await response.json();
+        if (!response.ok) {
+            return { success: false, message: result.message || 'Error al subir adjuntos' };
+        }
+
+        return { success: true };
+    } catch (error) {
+        console.error('Error al subir adjuntos:', error);
+        return { success: false, message: 'Error al subir adjuntos' };
+    }
+}
+
+// Función auxiliar para mostrar notificaciones
+function mostrarNotificacion(mensaje, tipo = 'success') {
+    // Buscar elemento de notificación o alert simple
+    const notifElement = document.getElementById('notification');
+    
+    if (notifElement) {
+        notifElement.textContent = mensaje;
+        notifElement.className = `notification ${tipo}`;
+        notifElement.style.display = 'block';
+        
+        setTimeout(() => {
+            notifElement.style.display = 'none';
+        }, 3000);
+    } else {
+        // Fallback a alert si no hay elemento de notificación
+        if (tipo === 'success') {
+            alert(mensaje);
+        }
     }
 }

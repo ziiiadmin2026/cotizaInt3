@@ -1,0 +1,234 @@
+╔═══════════════════════════════════════════════════════════════════════════╗
+║                   COMANDOS FINALES PARA DESPLIEGUE                         ║
+║           Sistema de Cotización - Servidor 10.10.1.211                    ║
+╚═══════════════════════════════════════════════════════════════════════════╝
+
+═══════════════════════════════════════════════════════════════════════════════
+ MÉTODO 1: DESDE GITHUB (RECOMENDADO)
+═══════════════════════════════════════════════════════════════════════════════
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ A. EN EL SERVIDOR DEBIAN (SSH como root)                                   │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+ssh root@10.10.1.211
+
+# Instalar herramientas
+apt install -y git python3 nano
+
+# Clonar repositorio
+cd /opt
+git clone https://github.com/ziiiadmin2026/cotizaInt3.git cotizador
+cd cotizador
+
+# Crear directorios
+mkdir -p data logs pdfs uploads/productos static/images
+chmod -R 755 data logs pdfs uploads static
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ B. EN WINDOWS (PowerShell) - Transferir Base de Datos                      │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+cd D:\Proyecto5Init(CotizadorLocal)
+
+# Transferir base de datos
+scp cotizaciones.db root@10.10.1.211:/opt/cotizador/data/cotizaciones.db
+
+# Transferir uploads (si tienes archivos)
+scp -r uploads root@10.10.1.211:/opt/cotizador/
+
+# Transferir PDFs (si tienes archivos)
+scp -r pdfs root@10.10.1.211:/opt/cotizador/
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ C. DE VUELTA EN EL SERVIDOR - Configurar y Desplegar                       │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+cd /opt/cotizador
+
+# Configurar variables
+cp .env.example .env
+nano .env
+
+# Generar SECRET_KEY (copiar el resultado)
+python3 -c "import secrets; print(secrets.token_hex(32))"
+
+# Pegar en .env:
+# SECRET_KEY=<resultado_del_comando_anterior>
+# SMTP_PASSWORD=tu_contraseña_real
+# BASE_URL=http://10.10.1.211:5000
+
+# Verificar que la BD está
+ls -la data/cotizaciones.db
+
+# Desplegar
+chmod +x deploy.sh backup.sh
+./deploy.sh
+
+# Ver logs
+docker compose logs -f web
+
+# Verificar
+curl http://localhost:5000/api/clientes
+
+═══════════════════════════════════════════════════════════════════════════════
+ MÉTODO 2: TRANSFERENCIA COMPLETA DESDE WINDOWS
+═══════════════════════════════════════════════════════════════════════════════
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ A. EN WINDOWS (PowerShell)                                                  │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+cd D:\Proyecto5Init(CotizadorLocal)
+
+# Opción A: Script automatizado
+.\transfer_to_server.ps1
+
+# Opción B: Manual
+ssh root@10.10.1.211 "mkdir -p /opt/cotizador"
+
+scp -r `
+  app.py `
+  config.py `
+  database.py `
+  email_sender.py `
+  pdf_generator.py `
+  requirements.txt `
+  .env.example `
+  Dockerfile `
+  docker-compose.yml `
+  gunicorn_config.py `
+  nginx.conf `
+  deploy.sh `
+  backup.sh `
+  static `
+  templates `
+  cotizaciones.db `
+  uploads `
+  pdfs `
+  root@10.10.1.211:/opt/cotizador/
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ B. EN EL SERVIDOR                                                           │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+cd /opt/cotizador
+
+# Mover BD al lugar correcto
+mkdir -p data
+mv cotizaciones.db data/ 2>/dev/null || true
+chmod -R 755 data logs pdfs uploads
+
+# Configurar
+cp .env.example .env
+nano .env
+
+# Desplegar
+chmod +x deploy.sh
+./deploy.sh
+
+═══════════════════════════════════════════════════════════════════════════════
+ VERIFICACIÓN FINAL
+═══════════════════════════════════════════════════════════════════════════════
+
+# En el servidor
+docker compose ps
+docker compose logs -f web
+curl http://localhost:5000/api/clientes
+
+# Desde tu PC (navegador)
+http://10.10.1.211:5000
+
+═══════════════════════════════════════════════════════════════════════════════
+ COMANDOS DE USO DIARIO
+═══════════════════════════════════════════════════════════════════════════════
+
+# Ver logs en tiempo real
+docker compose logs -f web
+
+# Ver últimas 100 líneas
+docker compose logs --tail=100 web
+
+# Reiniciar aplicación
+docker compose restart web
+
+# Detener todo
+docker compose down
+
+# Iniciar todo
+docker compose up -d
+
+# Ver estado
+docker compose ps
+
+# Ver recursos
+docker stats
+
+# Backup manual
+./backup.sh
+
+# Actualizar desde GitHub
+git pull
+docker compose down
+docker compose build
+docker compose up -d
+
+═══════════════════════════════════════════════════════════════════════════════
+ BACKUP AUTOMÁTICO
+═══════════════════════════════════════════════════════════════════════════════
+
+# Configurar cron
+crontab -e
+
+# Agregar esta línea (backup diario a las 2 AM)
+0 2 * * * /opt/cotizador/backup.sh >> /var/log/cotizador_backup.log 2>&1
+
+═══════════════════════════════════════════════════════════════════════════════
+ FIREWALL (OPCIONAL)
+═══════════════════════════════════════════════════════════════════════════════
+
+apt install -y ufw
+ufw allow 22/tcp
+ufw allow 5000/tcp
+ufw enable
+ufw status
+
+═══════════════════════════════════════════════════════════════════════════════
+ SOLUCIÓN DE PROBLEMAS
+═══════════════════════════════════════════════════════════════════════════════
+
+# Base de datos no encontrada
+ls -la /opt/cotizador/data/cotizaciones.db
+
+# Si no está, transferirla de nuevo
+scp cotizaciones.db root@10.10.1.211:/opt/cotizador/data/
+
+# Error de permisos
+chown -R 1000:1000 /opt/cotizador/data
+chmod -R 755 /opt/cotizador
+
+# Ver logs de error
+tail -f /opt/cotizador/logs/error.log
+docker compose logs --tail=200 web
+
+# Reconstruir todo
+docker compose down -v
+docker compose build --no-cache
+docker compose up -d
+
+═══════════════════════════════════════════════════════════════════════════════
+ ACCESOS
+═══════════════════════════════════════════════════════════════════════════════
+
+Aplicación:  http://10.10.1.211:5000
+Repositorio: https://github.com/ziiiadmin2026/cotizaInt3
+
+═══════════════════════════════════════════════════════════════════════════════
+ CONTACTO
+═══════════════════════════════════════════════════════════════════════════════
+
+Integrational3
+Email: contacto@integracional3.com.mx
+Tel: 449 356 6356
+
+═══════════════════════════════════════════════════════════════════════════════

@@ -69,9 +69,12 @@ async function verificarSesion() {
         // Actualizar UI con información del usuario
         document.getElementById('nombreUsuario').textContent = usuarioActual.nombre_completo;
         
-        // Mostrar botón de usuarios solo para admin
+        // Mostrar sección de administración solo para admin
         if (usuarioActual.rol === 'admin') {
-            document.getElementById('btnUsuarios').style.display = 'inline-block';
+            const adminSection = document.getElementById('admin-section');
+            if (adminSection) {
+                adminSection.style.display = 'block';
+            }
         }
         
         // Event listeners
@@ -120,9 +123,9 @@ function showTab(tabName) {
     const tabs = document.querySelectorAll('.tab-content');
     tabs.forEach(tab => tab.classList.remove('active'));
     
-    // Ocultar todos los botones activos
-    const tabBtns = document.querySelectorAll('.tab-btn');
-    tabBtns.forEach(btn => btn.classList.remove('active'));
+    // Remover active de nav-items
+    const navItems = document.querySelectorAll('.nav-item');
+    navItems.forEach(item => item.classList.remove('active'));
     
     // Mostrar la pestaña seleccionada
     const targetTab = document.getElementById(tabName);
@@ -130,13 +133,29 @@ function showTab(tabName) {
         targetTab.classList.add('active');
     }
     
-    // Activar el botón correspondiente (buscar por onclick o data)
-    tabBtns.forEach(btn => {
-        const btnOnclick = btn.getAttribute('onclick');
-        if (btnOnclick && btnOnclick.includes(`'${tabName}'`)) {
-            btn.classList.add('active');
+    // Activar nav-item correspondiente y actualizar breadcrumb
+    navItems.forEach(item => {
+        const itemOnclick = item.getAttribute('onclick');
+        if (itemOnclick && itemOnclick.includes(`'${tabName}'`)) {
+            item.classList.add('active');
         }
     });
+    
+    // Actualizar breadcrumb
+    const breadcrumbMap = {
+        'clientes': 'Inicio / Clientes',
+        'cotizaciones': 'Inicio / Cotizaciones'
+    };
+    const breadcrumbEl = document.getElementById('breadcrumb-text');
+    if (breadcrumbEl && breadcrumbMap[tabName]) {
+        breadcrumbEl.textContent = breadcrumbMap[tabName];
+    }
+    
+    // Cerrar sidebar en móvil
+    const sidebar = document.getElementById('sidebar');
+    if (sidebar && window.innerWidth <= 768) {
+        sidebar.classList.remove('active');
+    }
     
     // Recargar datos si es necesario
     if (tabName === 'clientes') {
@@ -162,6 +181,12 @@ async function cargarClientes() {
     try {
         const response = await fetch('/api/clientes');
         clientes = await response.json();
+        
+        // Actualizar badge
+        const badgeClientes = document.getElementById('badge-clientes');
+        if (badgeClientes) {
+            badgeClientes.textContent = clientes.length;
+        }
         
         const tbody = document.getElementById('clientes-tbody');
         
@@ -266,6 +291,12 @@ async function cargarCotizaciones() {
     try {
         const response = await fetch('/api/cotizaciones');
         cotizaciones = await response.json();
+        
+        // Actualizar badge
+        const badgeCotizaciones = document.getElementById('badge-cotizaciones');
+        if (badgeCotizaciones) {
+            badgeCotizaciones.textContent = cotizaciones.length;
+        }
         
         const tbody = document.getElementById('cotizaciones-tbody');
         
@@ -637,6 +668,15 @@ async function verCotizacion(cotizacionId) {
                 <td class="text-center"><strong>$${item.subtotal.toFixed(2)}</strong></td>
             </tr>
         `).join('');
+
+        const adjuntosHTML = (cotizacion.adjuntos && cotizacion.adjuntos.length) ? `
+            <div class="form-section">
+                <h3>Adjuntos</h3>
+                <ul>
+                    ${cotizacion.adjuntos.map(a => `<li>${a.nombre_original}</li>`).join('')}
+                </ul>
+            </div>
+        ` : '';
         
         const modalBody = document.getElementById('modal-body');
         modalBody.innerHTML = `
@@ -687,6 +727,8 @@ async function verCotizacion(cotizacionId) {
                     <p>${cotizacion.notas}</p>
                 </div>
             ` : ''}
+
+            ${adjuntosHTML}
             
             <div class="form-actions">
                 <button class="btn btn-success" onclick="descargarPDF(${cotizacionId})">Descargar PDF</button>
@@ -930,11 +972,11 @@ async function crearProductoRapido(e) {
     }
 }
 
-// Cerrar modal al hacer clic fuera de él
-window.onclick = function(event) {
-    const modal = document.getElementById('modal-cotizacion');
-    
-    if (event.target === modal) {
-        cerrarModal();
-    }
-}
+// DESHABILITADO: No cerrar modal al hacer clic fuera para evitar pérdida de datos
+// window.onclick = function(event) {
+//     const modal = document.getElementById('modal-cotizacion');
+//     
+//     if (event.target === modal) {
+//         cerrarModal();
+//     }
+// }

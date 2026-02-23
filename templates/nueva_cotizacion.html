@@ -78,6 +78,16 @@
                     </div>
                 </div>
 
+                <div class="form-section">
+                    <h3>Adjuntos</h3>
+                    <div class="form-group">
+                        <input type="file" id="cotizacion-adjuntos" multiple>
+                        <small>Máx. 5 archivos, 15 MB c/u (PDF, Office, imágenes, ZIP).</small>
+                    </div>
+                    <div id="adjuntos-existentes"></div>
+                    <div id="adjuntos-seleccionados"></div>
+                </div>
+
                 <div class="form-actions">
                     <button type="submit" class="btn btn-success">Guardar Cotización</button>
                     <button type="button" class="btn btn-secondary" onclick="volverAlInicio()">Cancelar</button>
@@ -123,6 +133,6 @@
         </div>
     </div>
 
-    <script src="{{ url_for('static', filename='js/nueva_cotizacion.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/nueva_cotizacion.js') }}?v=20260222"></script>
 </body>
 </html>

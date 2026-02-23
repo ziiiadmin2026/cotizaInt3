@@ -66,7 +66,8 @@ class Database:
             ('token_aprobacion', 'TEXT UNIQUE'),
             ('estado_aprobacion', "TEXT DEFAULT 'pendiente'"),
             ('fecha_aprobacion', 'TIMESTAMP'),
-            ('comentarios_cliente', 'TEXT')
+            ('comentarios_cliente', 'TEXT'),
+            ('creado_por', 'INTEGER')  # ID del usuario que creó la cotización
         ]
         
         for columna, tipo in columnas_aprobacion:
@@ -81,11 +82,35 @@ class Database:
             CREATE TABLE IF NOT EXISTS cotizacion_items (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 cotizacion_id INTEGER NOT NULL,
+                producto_id INTEGER,
                 concepto TEXT NOT NULL,
                 descripcion TEXT,
                 cantidad INTEGER NOT NULL,
                 precio_unitario REAL NOT NULL,
                 subtotal REAL NOT NULL,
+                FOREIGN KEY (cotizacion_id) REFERENCES cotizaciones (id) ON DELETE CASCADE,
+                FOREIGN KEY (producto_id) REFERENCES productos (id) ON DELETE SET NULL
+            )
+        ''')
+        
+        # Agregar columna producto_id si no existe
+        try:
+            cursor.execute('ALTER TABLE cotizacion_items ADD COLUMN producto_id INTEGER')
+            conn.commit()
+        except sqlite3.OperationalError:
+            pass
+
+        # Tabla de adjuntos de cotización
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS cotizacion_adjuntos (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                cotizacion_id INTEGER NOT NULL,
+                nombre_original TEXT NOT NULL,
+                nombre_archivo TEXT NOT NULL,
+                ruta_archivo TEXT NOT NULL,
+                mime_tipo TEXT,
+                tamano_bytes INTEGER,
+                fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (cotizacion_id) REFERENCES cotizaciones (id) ON DELETE CASCADE
             )
         ''')
@@ -116,10 +141,18 @@ class Database:
                 precio REAL NOT NULL,
                 unidad TEXT DEFAULT 'pza',
                 categoria TEXT,
+                imagen_url TEXT,
                 activo INTEGER DEFAULT 1,
                 fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         ''')
+        
+        # Agregar columna imagen_url si no existe
+        try:
+            cursor.execute('ALTER TABLE productos ADD COLUMN imagen_url TEXT')
+            conn.commit()
+        except sqlite3.OperationalError:
+            pass
         
         conn.commit()
         
@@ -190,7 +223,7 @@ class Database:
         conn.close()
         return dict(cliente) if cliente else None
     
-    def crear_cotizacion(self, cliente_id, items, fecha_validez=None, notas='', condiciones_comerciales='', iva_porcentaje=16):
+    def crear_cotizacion(self, cliente_id, items, fecha_validez=None, notas='', condiciones_comerciales='', iva_porcentaje=16, creado_por=None):
         """Crear una nueva cotización con sus items"""
         conn = self.get_connection()
         cursor = conn.cursor()
@@ -213,9 +246,9 @@ class Database:
         # Insertar cotización
         cursor.execute('''
             INSERT INTO cotizaciones 
-            (numero_cotizacion, cliente_id, fecha_validez, subtotal, iva, total, notas, condiciones_comerciales, token_aprobacion, estado_aprobacion)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ''', (numero_cotizacion, cliente_id, fecha_validez, subtotal, iva, total, notas, condiciones_comerciales, token_aprobacion, 'pendiente'))
+            (numero_cotizacion, cliente_id, fecha_validez, subtotal, iva, total, notas, condiciones_comerciales, token_aprobacion, estado_aprobacion, creado_por)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (numero_cotizacion, cliente_id, fecha_validez, subtotal, iva, total, notas, condiciones_comerciales, token_aprobacion, 'pendiente', creado_por))
         
         cotizacion_id = cursor.lastrowid
         
@@ -224,9 +257,9 @@ class Database:
             item_subtotal = item['cantidad'] * item['precio_unitario']
             cursor.execute('''
                 INSERT INTO cotizacion_items 
-                (cotizacion_id, concepto, descripcion, cantidad, precio_unitario, subtotal)
-                VALUES (?, ?, ?, ?, ?, ?)
-            ''', (cotizacion_id, item['concepto'], item.get('descripcion', ''), 
+                (cotizacion_id, producto_id, concepto, descripcion, cantidad, precio_unitario, subtotal)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            ''', (cotizacion_id, item.get('producto_id'), item['concepto'], item.get('descripcion', ''), 
                   item['cantidad'], item['precio_unitario'], item_subtotal))
         
         conn.commit()
@@ -240,9 +273,11 @@ class Database:
         cursor = conn.cursor()
         
         cursor.execute('''
-            SELECT c.*, cl.nombre as cliente_nombre, cl.email as cliente_email
+            SELECT c.*, cl.nombre as cliente_nombre, cl.email as cliente_email,
+                   u.nombre_completo as creado_por_nombre, u.username as creado_por_username
             FROM cotizaciones c
             JOIN clientes cl ON c.cliente_id = cl.id
+            LEFT JOIN usuarios u ON c.creado_por = u.id
             ORDER BY c.fecha_creacion DESC
         ''')
         
@@ -258,9 +293,11 @@ class Database:
         
         # Obtener cotización
         cursor.execute('''
-            SELECT c.*, cl.*
+            SELECT c.*, cl.*,
+                   u.nombre_completo as creado_por_nombre, u.username as creado_por_username
             FROM cotizaciones c
             JOIN clientes cl ON c.cliente_id = cl.id
+            LEFT JOIN usuarios u ON c.creado_por = u.id
             WHERE c.id = ?
         ''', (cotizacion_id,))
         
@@ -271,16 +308,72 @@ class Database:
         
         cotizacion_dict = dict(cotizacion)
         
-        # Obtener items
+        # Obtener items con información del producto (JOIN)
         cursor.execute('''
-            SELECT * FROM cotizacion_items WHERE cotizacion_id = ?
+            SELECT ci.*, p.codigo as producto_codigo, p.imagen_url as producto_imagen
+            FROM cotizacion_items ci
+            LEFT JOIN productos p ON ci.producto_id = p.id
+            WHERE ci.cotizacion_id = ?
+            ORDER BY ci.id
         ''', (cotizacion_id,))
         
         items = [dict(row) for row in cursor.fetchall()]
         cotizacion_dict['items'] = items
+
+        # Obtener adjuntos
+        cursor.execute('''
+            SELECT * FROM cotizacion_adjuntos WHERE cotizacion_id = ?
+            ORDER BY fecha_creacion ASC
+        ''', (cotizacion_id,))
+
+        adjuntos = [dict(row) for row in cursor.fetchall()]
+        cotizacion_dict['adjuntos'] = adjuntos
         
         conn.close()
         return cotizacion_dict
+
+    def agregar_adjuntos(self, cotizacion_id, adjuntos):
+        """Agregar adjuntos a una cotización"""
+        if not adjuntos:
+            return 0
+
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        for adjunto in adjuntos:
+            cursor.execute('''
+                INSERT INTO cotizacion_adjuntos
+                (cotizacion_id, nombre_original, nombre_archivo, ruta_archivo, mime_tipo, tamano_bytes)
+                VALUES (?, ?, ?, ?, ?, ?)
+            ''', (
+                cotizacion_id,
+                adjunto['nombre_original'],
+                adjunto['nombre_archivo'],
+                adjunto['ruta_archivo'],
+                adjunto.get('mime_tipo'),
+                adjunto.get('tamano_bytes')
+            ))
+
+        conn.commit()
+        count = cursor.rowcount
+        conn.close()
+
+        return count
+
+    def obtener_adjuntos(self, cotizacion_id):
+        """Obtener adjuntos de una cotización"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute('''
+            SELECT * FROM cotizacion_adjuntos WHERE cotizacion_id = ?
+            ORDER BY fecha_creacion ASC
+        ''', (cotizacion_id,))
+
+        adjuntos = [dict(row) for row in cursor.fetchall()]
+        conn.close()
+
+        return adjuntos
     
     def actualizar_cotizacion(self, cotizacion_id, cliente_id, items, fecha_validez=None, notas='', condiciones_comerciales='', iva_porcentaje=16):
         """Actualizar una cotización existente"""
@@ -307,9 +400,9 @@ class Database:
             item_subtotal = item['cantidad'] * item['precio_unitario']
             cursor.execute('''
                 INSERT INTO cotizacion_items 
-                (cotizacion_id, concepto, descripcion, cantidad, precio_unitario, subtotal)
-                VALUES (?, ?, ?, ?, ?, ?)
-            ''', (cotizacion_id, item['concepto'], item.get('descripcion', ''), 
+                (cotizacion_id, producto_id, concepto, descripcion, cantidad, precio_unitario, subtotal)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            ''', (cotizacion_id, item.get('producto_id'), item['concepto'], item.get('descripcion', ''), 
                   item['cantidad'], item['precio_unitario'], item_subtotal))
         
         conn.commit()
@@ -514,7 +607,7 @@ class Database:
     # FUNCIONES DE PRODUCTOS Y SERVICIOS
     # ==========================================
     
-    def crear_producto(self, codigo, nombre, descripcion, tipo, precio, unidad='pza', categoria=''):
+    def crear_producto(self, codigo, nombre, descripcion, tipo, precio, unidad='pza', categoria='', imagen_url=None):
         """Crear un nuevo producto o servicio"""
         conn = self.get_connection()
         cursor = conn.cursor()
@@ -526,9 +619,9 @@ class Database:
             return None
         
         cursor.execute('''
-            INSERT INTO productos (codigo, nombre, descripcion, tipo, precio, unidad, categoria)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        ''', (codigo, nombre, descripcion, tipo, precio, unidad, categoria))
+            INSERT INTO productos (codigo, nombre, descripcion, tipo, precio, unidad, categoria, imagen_url)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (codigo, nombre, descripcion, tipo, precio, unidad, categoria, imagen_url))
         
         conn.commit()
         producto_id = cursor.lastrowid
@@ -576,7 +669,7 @@ class Database:
         return dict(producto) if producto else None
     
     def actualizar_producto(self, producto_id, codigo=None, nombre=None, descripcion=None, 
-                           tipo=None, precio=None, unidad=None, categoria=None, activo=None):
+                           tipo=None, precio=None, unidad=None, categoria=None, activo=None, imagen_url=None):
         """Actualizar un producto"""
         conn = self.get_connection()
         cursor = conn.cursor()
@@ -621,6 +714,10 @@ class Database:
             updates.append('activo = ?')
             params.append(activo)
         
+        if imagen_url is not None:
+            updates.append('imagen_url = ?')
+            params.append(imagen_url)
+        
         if not updates:
             conn.close()
             return False
@@ -654,9 +751,11 @@ class Database:
         cursor = conn.cursor()
         
         cursor.execute('''
-            SELECT c.*, cl.nombre as cliente_nombre, cl.email as cliente_email
+            SELECT c.*, cl.nombre as cliente_nombre, cl.email as cliente_email,
+                   u.nombre_completo as creado_por_nombre, u.username as creado_por_username
             FROM cotizaciones c
             JOIN clientes cl ON c.cliente_id = cl.id
+            LEFT JOIN usuarios u ON c.creado_por = u.id
             WHERE c.token_aprobacion = ?
         ''', (token,))
         

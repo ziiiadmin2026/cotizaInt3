@@ -26,6 +26,16 @@ class Config:
     # Directorios
     PDF_FOLDER = 'pdfs'
     UPLOAD_FOLDER = 'uploads'
+
+    # Adjuntos de cotización
+    MAX_ATTACHMENTS = int(os.getenv('MAX_ATTACHMENTS', 5))
+    MAX_ATTACHMENT_MB = int(os.getenv('MAX_ATTACHMENT_MB', 15))
+    MAX_TOTAL_ATTACH_MB = int(os.getenv('MAX_TOTAL_ATTACH_MB', 20))
+    MAX_CONTENT_LENGTH = MAX_TOTAL_ATTACH_MB * 1024 * 1024
+    ALLOWED_ATTACHMENT_EXTENSIONS = {
+        'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx',
+        'png', 'jpg', 'jpeg', 'zip'
+    }
     
     # Configuración de la empresa (personalizable)
     EMPRESA_NOMBRE = 'Integrational3'

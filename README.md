@@ -22,7 +22,41 @@ Sistema profesional de gestión de cotizaciones con generación de PDFs y envío
 - **Envío de Emails**: SMTP (smtplib)
 - **Frontend**: HTML5, CSS3, JavaScript (Vanilla)
 
-## 📦 Instalación
+## � Despliegue con Docker (Recomendado para Producción)
+
+### Inicio Rápido con Docker
+
+1. **Configurar variables de entorno**:
+```bash
+cp .env.example .env
+nano .env  # Editar con tus credenciales
+```
+
+2. **Verificar configuración**:
+```bash
+python verify_deployment.py
+```
+
+3. **Desplegar**:
+```bash
+# Linux/Mac
+chmod +x deploy.sh
+./deploy.sh
+
+# Windows
+.\deploy.ps1 -Build
+
+# Manual
+docker compose up -d
+```
+
+4. **Acceder**: http://localhost:5000
+
+📖 **Documentación completa**: Ver [DEPLOYMENT.md](DEPLOYMENT.md) para guía detallada de producción.
+
+---
+
+## 📦 Instalación Tradicional (Desarrollo)
 
 ### Requisitos Previos
 

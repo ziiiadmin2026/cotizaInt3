@@ -37,6 +37,19 @@ async function verificarSesion() {
         document.getElementById('formUsuario').addEventListener('submit', guardarUsuario);
         document.getElementById('formPassword').addEventListener('submit', cambiarPassword);
         
+        // Prevenir cierre con tecla ESC
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                const modalUsuario = document.getElementById('modalUsuario');
+                const modalPassword = document.getElementById('modalPassword');
+                if ((modalUsuario && modalUsuario.classList.contains('show')) || 
+                    (modalPassword && modalPassword.classList.contains('show'))) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                }
+            }
+        });
+        
     } catch (error) {
         console.error('Error al verificar sesión:', error);
         window.location.href = '/login';
@@ -307,19 +320,19 @@ function cerrarModalPassword() {
     document.getElementById('modalPassword').classList.remove('show');
 }
 
-// Cerrar modal al hacer clic fuera
-document.addEventListener('click', function(e) {
-    const modalUsuario = document.getElementById('modalUsuario');
-    const modalPassword = document.getElementById('modalPassword');
-    
-    if (e.target === modalUsuario) {
-        cerrarModal();
-    }
-    
-    if (e.target === modalPassword) {
-        cerrarModalPassword();
-    }
-});
+// DESHABILITADO: No cerrar modales al hacer clic fuera para evitar pérdida de datos
+// document.addEventListener('click', function(e) {
+//     const modalUsuario = document.getElementById('modalUsuario');
+//     const modalPassword = document.getElementById('modalPassword');
+//     
+//     if (e.target === modalUsuario) {
+//         cerrarModal();
+//     }
+//     
+//     if (e.target === modalPassword) {
+//         cerrarModalPassword();
+//     }
+// });
 
 // Mostrar alertas
 function mostrarAlerta(mensaje, tipo = 'success') {

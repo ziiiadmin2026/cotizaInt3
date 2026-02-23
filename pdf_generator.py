@@ -60,14 +60,14 @@ class PDFGenerator:
         
         filepath = os.path.join(Config.PDF_FOLDER, filename)
         
-        # Crear documento con márgenes personalizados
+        # Crear documento con márgenes personalizados (aumentar bottomMargin para el footer)
         doc = SimpleDocTemplate(
             filepath,
             pagesize=letter,
             rightMargin=40,
             leftMargin=40,
             topMargin=30,
-            bottomMargin=30
+            bottomMargin=60  # Aumentado para el footer con información del usuario
         )
         
         # Contenedor para los elementos del PDF
@@ -198,22 +198,26 @@ class PDFGenerator:
         # ============================================
         
         # Encabezados de la tabla
-        table_data = [['Código', 'Producto', 'Cant.', 'Precio Unit.', 'Total']]
+        table_data = [['Imagen', 'Código', 'Producto', 'Cant.', 'Precio Unit.', 'Total']]
         
-        # Items con código y descripción en líneas separadas
+        # Items con código, imagen y descripción
         for item in cotizacion_data['items']:
-            # Extraer código del concepto (formato: "CODIGO - Nombre")
+            # Obtener código del producto
+            codigo = item.get('producto_codigo', '')
+            if not codigo:
+                # Fallback: extraer del concepto si tiene formato "CODIGO - Nombre"
+                concepto = item.get('concepto', 'N/A')
+                if ' - ' in concepto:
+                    partes = concepto.split(' - ', 1)
+                    codigo = partes[0].strip()
+            
+            # Nombre del producto
             concepto = item.get('concepto', 'N/A')
-            codigo = ''
             producto_nombre = concepto
-            
-            # Intentar separar código del nombre
             if ' - ' in concepto:
-                partes = concepto.split(' - ', 1)
-                codigo = partes[0].strip()
-                producto_nombre = partes[1].strip()
+                producto_nombre = concepto.split(' - ', 1)[1].strip()
             
-            # Segunda línea: descripción del producto
+            # Descripción del producto
             descripcion = item.get('descripcion', '')
             
             # Formato del producto: nombre en bold y descripción debajo
@@ -222,7 +226,36 @@ class PDFGenerator:
             else:
                 producto_text = f"<b>{producto_nombre}</b>"
             
+            # Imagen del producto (thumbnail)
+            imagen_cell = ''
+            imagen_url = item.get('producto_imagen')
+            if imagen_url:
+                try:
+                    # Si es URL web
+                    if imagen_url.startswith('http://') or imagen_url.startswith('https://'):
+                        img_data = BytesIO(urllib.request.urlopen(imagen_url).read())
+                        img = Image(img_data, width=0.6*inch, height=0.6*inch)
+                    # Si es ruta relativa /uploads/...
+                    elif imagen_url.startswith('/uploads/'):
+                        ruta_local = imagen_url.lstrip('/').replace('/', os.sep)
+                        if os.path.exists(ruta_local):
+                            img = Image(ruta_local, width=0.6*inch, height=0.6*inch)
+                        else:
+                            img = Paragraph('<font size=6>N/A</font>', self.styles['Normal'])
+                    # Si es ruta local directa
+                    elif os.path.exists(imagen_url):
+                        img = Image(imagen_url, width=0.6*inch, height=0.6*inch)
+                    else:
+                        img = Paragraph('<font size=6>Sin img</font>', self.styles['Normal'])
+                    imagen_cell = img
+                except Exception as e:
+                    print(f"Error al cargar imagen: {e}")
+                    imagen_cell = Paragraph('<font size=6>N/A</font>', self.styles['Normal'])
+            else:
+                imagen_cell = Paragraph('<font size=6>-</font>', self.styles['Normal'])
+            
             table_data.append([
+                imagen_cell,
                 Paragraph(f'<font size=9><b>{codigo}</b></font>', self.styles['Normal']),
                 Paragraph(producto_text, self.styles['Normal']),
                 str(item['cantidad']),
@@ -231,7 +264,7 @@ class PDFGenerator:
             ])
         
         # Crear tabla de productos
-        items_table = Table(table_data, colWidths=[0.8*inch, 3*inch, 0.6*inch, 1.2*inch, 1.2*inch])
+        items_table = Table(table_data, colWidths=[0.7*inch, 0.7*inch, 2.3*inch, 0.6*inch, 1.2*inch, 1.2*inch])
         items_table.setStyle(TableStyle([
             # Header
             ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#0066CC')),
@@ -245,9 +278,9 @@ class PDFGenerator:
             
             # Body
             ('FONTSIZE', (0, 1), (-1, -1), 9),
-            ('ALIGN', (0, 1), (0, -1), 'CENTER'),
-            ('ALIGN', (1, 1), (1, -1), 'LEFT'),
-            ('ALIGN', (2, 1), (-1, -1), 'CENTER'),
+            ('ALIGN', (0, 1), (1, -1), 'CENTER'),
+            ('ALIGN', (2, 1), (2, -1), 'LEFT'),
+            ('ALIGN', (3, 1), (-1, -1), 'CENTER'),
             ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
             ('TOPPADDING', (0, 1), (-1, -1), 8),
             ('BOTTOMPADDING', (0, 1), (-1, -1), 8),
@@ -417,7 +450,37 @@ class PDFGenerator:
                                        alignment=TA_CENTER)
         story.append(Paragraph(mensaje_final, mensaje_style))
         
-        # Construir PDF
-        doc.build(story)
+        # Función para el pie de página
+        def footer(canvas_obj, doc_obj):
+            canvas_obj.saveState()
+            
+            # Configuración de zona horaria México
+            tz_mexico = pytz.timezone('America/Mexico_City')
+            fecha_generacion = datetime.now(tz_mexico).strftime('%d/%m/%Y %H:%M')
+            
+            # Información del usuario que generó la cotización
+            usuario_nombre = cotizacion_data.get('creado_por_nombre') or 'Usuario no registrado'
+            
+            # Línea separadora
+            canvas_obj.setStrokeColor(colors.HexColor('#CCCCCC'))
+            canvas_obj.setLineWidth(0.5)
+            canvas_obj.line(40, 40, letter[0] - 40, 40)
+            
+            # Texto del pie de página - Izquierda: Usuario y fecha
+            canvas_obj.setFont('Helvetica', 7)
+            canvas_obj.setFillColor(colors.HexColor('#666666'))
+            canvas_obj.drawString(40, 28, f'Generado por: {usuario_nombre}')
+            canvas_obj.drawString(40, 18, f'Fecha de generación: {fecha_generacion}')
+            
+            # Texto del pie de página - Derecha: Número de página
+            canvas_obj.setFont('Helvetica', 7)
+            page_num = canvas_obj.getPageNumber()
+            canvas_obj.drawRightString(letter[0] - 40, 28, f'Página {page_num}')
+            canvas_obj.drawRightString(letter[0] - 40, 18, f'{cotizacion_data["numero_cotizacion"]}')
+            
+            canvas_obj.restoreState()
+        
+        # Construir PDF con footer
+        doc.build(story, onFirstPage=footer, onLaterPages=footer)
         
         return filepath

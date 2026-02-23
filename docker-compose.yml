@@ -1,0 +1,71 @@
+version: '3.8'
+
+services:
+  web:
+    build: .
+    container_name: cotizador-web
+    image: integrational3/cotizador:latest
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    environment:
+      - FLASK_ENV=production
+      - SECRET_KEY=${SECRET_KEY}
+      - SMTP_SERVER=${SMTP_SERVER}
+      - SMTP_PORT=${SMTP_PORT}
+      - SMTP_EMAIL=${SMTP_EMAIL}
+      - SMTP_PASSWORD=${SMTP_PASSWORD}
+      - BASE_URL=${BASE_URL}
+      - DATABASE_PATH=/app/data/cotizaciones.db
+      - TZ=America/Mexico_City
+    volumes:
+      # Datos persistentes
+      - ./data:/app/data
+      - ./pdfs:/app/pdfs
+      - ./uploads:/app/uploads
+      - ./logs:/app/logs
+    networks:
+      - cotizador-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/api/clientes"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Opcional: Nginx como proxy reverso
+  nginx:
+    image: nginx:alpine
+    container_name: cotizador-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./ssl:/etc/nginx/ssl:ro
+      - ./static:/usr/share/nginx/html/static:ro
+    depends_on:
+      - web
+    networks:
+      - cotizador-net
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "5m"
+        max-file: "3"
+    # Descomentar si no usas nginx
+    # profiles: ["with-nginx"]
+
+networks:
+  cotizador-net:
+    driver: bridge
+
+volumes:
+  cotizador-data:
+    driver: local

@@ -1,0 +1,74 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+.venv
+
+# Entornos y configuración local
+.env
+.env.local
+*.local
+
+# Base de datos local
+*.db
+*.sqlite
+*.sqlite3
+
+# Archivos generados
+pdfs/
+uploads/
+!uploads/README.md
+logs/
+data/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Sistema
+.DS_Store
+Thumbs.db
+*.log
+
+# Tests y debug
+test_*.py
+debug_*.py
+*.test
+__pycache__
+
+# Archivos temporales
+*.tmp
+*.bak
+*.backup
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# Documentación
+README.md
+docs/
+*.md
+
+# Scripts de utilidad (opcional)
+actualizar_*.py
+agregar_*.py
+configurar_*.py
+download_*.py
+exportar_*.py
+insertar_*.py
+limpiar_*.py
+
+# Node (si existe)
+node_modules/
+npm-debug.log
+package-lock.json

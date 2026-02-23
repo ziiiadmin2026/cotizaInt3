@@ -15,7 +15,7 @@ class EmailSender:
         self.email = Config.SMTP_EMAIL
         self.password = Config.SMTP_PASSWORD
     
-    def enviar_cotizacion_email(self, destinatario, cotizacion_data, pdf_path=None):
+    def enviar_cotizacion_email(self, destinatario, cotizacion_data, pdf_path=None, adjuntos=None):
         """
         Enviar cotización por correo electrónico
         
@@ -23,6 +23,7 @@ class EmailSender:
             destinatario: Email del destinatario
             cotizacion_data: Datos de la cotización
             pdf_path: Ruta del PDF adjunto (opcional)
+            adjuntos: Lista de adjuntos extra (opcional)
         
         Returns:
             True si el envío fue exitoso, False en caso contrario
@@ -54,6 +55,23 @@ class EmailSender:
                         filename=os.path.basename(pdf_path)
                     )
                     msg.attach(pdf_attachment)
+
+            # Adjuntar archivos adicionales si existen
+            if adjuntos:
+                for adjunto in adjuntos:
+                    ruta = adjunto.get('ruta_archivo')
+                    nombre = adjunto.get('nombre_original') or os.path.basename(ruta or '')
+                    if not ruta or not os.path.exists(ruta):
+                        continue
+                    print(f"[EMAIL] Adjuntando archivo: {ruta}")
+                    with open(ruta, 'rb') as f:
+                        extra_attachment = MIMEApplication(f.read())
+                        extra_attachment.add_header(
+                            'Content-Disposition',
+                            'attachment',
+                            filename=nombre
+                        )
+                        msg.attach(extra_attachment)
             
             # Enviar correo
             print(f"[EMAIL] Conectando al servidor SMTP...")
