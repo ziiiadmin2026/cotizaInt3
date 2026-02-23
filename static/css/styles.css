@@ -352,6 +352,26 @@ body {
     transform: translateY(-2px);
 }
 
+/* Sidebar Overlay (Mobile) */
+.sidebar-overlay {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 999;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    backdrop-filter: blur(2px);
+}
+
+.sidebar-overlay.active {
+    display: block;
+    opacity: 1;
+}
+
 /* ============ RESPONSIVE ============ */
 @media (max-width: 768px) {
     .sidebar {
@@ -739,6 +759,8 @@ header h2 {
     overflow-x: auto;
     border-radius: 16px;
     box-shadow: 0 8px 25px rgba(0, 0, 0, 0.08);
+    -webkit-overflow-scrolling: touch; /* Smooth scrolling en iOS */
+    position: relative;
 }
 
 .data-table {
@@ -1240,5 +1262,362 @@ header h2 {
     .imagen-preview-box-rapido {
         width: 100%;
         height: 150px;
+    }
+}
+
+/* ========================================
+   MEJORAS RESPONSIVE COMPREHENSIVAS
+   ======================================== */
+
+/* Tablet y móviles grandes (hasta 1024px) */
+@media (max-width: 1024px) {
+    .sidebar {
+        width: 260px;
+    }
+    
+    .main-content {
+        margin-left: 260px;
+    }
+    
+    .stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+/* Tablets pequeñas y móviles grandes (hasta 768px) */
+@media (max-width: 768px) {
+    /* Sidebar mobile-first */
+    .sidebar {
+        transform: translateX(-100%);
+        width: 280px;
+    }
+    
+    .sidebar.active {
+        transform: translateX(0);
+        box-shadow: 4px 0 20px rgba(0, 0, 0, 0.3);
+    }
+    
+    .sidebar-toggle {
+        display: flex;
+        position: fixed;
+        top: 15px;
+        left: 15px;
+        z-index: 999;
+        background: #3b82f6;
+        color: white;
+        border: none;
+        width: 48px;
+        height: 48px;
+        border-radius: 50%;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+        cursor: pointer;
+        transition: all 0.3s ease;
+    }
+    
+    .sidebar-toggle:active {
+        transform: scale(0.95);
+    }
+    
+    .main-content {
+        margin-left: 0;
+        padding-top: 70px;
+    }
+    
+    .topbar {
+        padding-left: 75px;
+        flex-wrap: wrap;
+    }
+    
+    .search-box {
+        order: 3;
+        width: 100%;
+        margin-top: 10px;
+        min-width: 100%;
+    }
+    
+    .topbar-actions {
+        gap: 8px;
+    }
+    
+    .btn-icon {
+        width: 42px;
+        height: 42px;
+    }
+    
+    /* Stats grid a columna única */
+    .stats-grid {
+        grid-template-columns: 1fr;
+        gap: 15px;
+    }
+    
+    /* Tablas responsive */
+    .table-container {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        border-radius: 12px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    }
+    
+    .data-table {
+        min-width: 600px;
+        font-size: 13px;
+    }
+    
+    .data-table th,
+    .data-table td {
+        padding: 12px 10px;
+        white-space: nowrap;
+    }
+    
+    /* Formularios más tocables */
+    .form-group input,
+    .form-group select,
+    .form-group textarea {
+        font-size: 16px; /* Previene zoom en iOS */
+        padding: 14px 16px;
+        min-height: 48px;
+    }
+    
+    .form-row {
+        grid-template-columns: 1fr;
+        gap: 15px;
+    }
+    
+    /* Botones más grandes y tocables */
+    .btn {
+        min-height: 48px;
+        padding: 14px 24px;
+        font-size: 15px;
+    }
+    
+    .btn-icon {
+        min-width: 44px;
+        min-height: 44px;
+    }
+    
+    /* Modales full-screen en móviles */
+    .modal {
+        padding: 0;
+    }
+    
+    .modal-content {
+        max-width: 100%;
+        width: 100%;
+        height: 100vh;
+        margin: 0;
+        border-radius: 0;
+        overflow-y: auto;
+    }
+    
+    .modal-header {
+        position: sticky;
+        top: 0;
+        background: white;
+        z-index: 10;
+        padding: 20px;
+        border-bottom: 2px solid #e2e8f0;
+    }
+    
+    .modal-body {
+        padding: 20px;
+    }
+    
+    .modal-footer {
+        position: sticky;
+        bottom: 0;
+        background: white;
+        border-top: 2px solid #e2e8f0;
+        padding: 20px;
+    }
+    
+    /* Grid de productos en modal */
+    .productos-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .producto-card {
+        padding: 15px;
+    }
+    
+    /* Sección de acciones */
+    .section-actions {
+        flex-direction: column;
+        gap: 10px;
+    }
+    
+    .section-actions .btn {
+        width: 100%;
+    }
+    
+    /* Tabs verticales */
+    .nav-tabs {
+        flex-direction: column;
+    }
+    
+    .nav-tabs .tab {
+        width: 100%;
+        text-align: left;
+        padding: 14px 20px;
+    }
+}
+
+/* Móviles pequeños (hasta 480px) */
+@media (max-width: 480px) {
+    /* Typography más pequeña */
+    body {
+        font-size: 14px;
+    }
+    
+    h1 {
+        font-size: 24px;
+    }
+    
+    h2 {
+        font-size: 20px;
+    }
+    
+    h3 {
+        font-size: 18px;
+    }
+    
+    /* Sidebar más estrecha */
+    .sidebar {
+        width: 260px;
+    }
+    
+    /* Content padding reducido */
+    .content-wrapper {
+        padding: 15px;
+    }
+    
+    /* Cards más compactos */
+    .stat-card {
+        padding: 16px;
+    }
+    
+    .stat-value {
+        font-size: 26px;
+    }
+    
+    /* Tabla ultra compacta */
+    .data-table {
+        font-size: 12px;
+        min-width: 500px;
+    }
+    
+    .data-table th,
+    .data-table td {
+        padding: 10px 8px;
+    }
+    
+    /* Botones de acción apilados */
+    .action-buttons {
+        flex-direction: column;
+        width: 100%;
+    }
+    
+    .action-buttons .btn-icon {
+        width: 100%;
+        border-radius: 8px;
+        justify-content: center;
+    }
+    
+    /* Modal headers más compactos */
+    .modal-header h2 {
+        font-size: 18px;
+    }
+    
+    /* Form inputs más grandes para touch */
+    .form-group input,
+    .form-group select,
+    .form-group textarea {
+        font-size: 16px;
+        padding: 16px;
+    }
+    
+    /* Quick actions apiladas */
+    .quick-actions {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        padding: 12px;
+    }
+    
+    .btn-quick-action {
+        width: 100%;
+        padding: 14px;
+    }
+}
+
+/* Landscape móviles */
+@media (max-height: 600px) and (orientation: landscape) {
+    .modal-content {
+        height: 100vh;
+        overflow-y: auto;
+    }
+    
+    .sidebar {
+        max-height: 100vh;
+    }
+}
+
+/* Touch-friendly improvements */
+@media (hover: none) and (pointer: coarse) {
+    /* Aumentar áreas táctiles */
+    .btn,
+    .btn-icon,
+    a,
+    button {
+        min-height: 44px;
+        min-width: 44px;
+    }
+    
+    /* Mejorar feedback visual en touch */
+    .btn:active,
+    .btn-icon:active {
+        transform: scale(0.97);
+        opacity: 0.9;
+    }
+    
+    /* Eliminar hover effects en touch */
+    .btn:hover,
+    .btn-icon:hover {
+        transform: none;
+    }
+    
+    /* Espaciado más generoso */
+    .data-table tbody tr {
+        cursor: pointer;
+    }
+    
+    .data-table tbody tr:active {
+        background: #f0f9ff;
+    }
+}
+
+/* High DPI screens */
+@media (-webkit-min-device-pixel-ratio: 2), (min-resolution: 192dpi) {
+    .sidebar-logo,
+    img {
+        image-rendering: -webkit-optimize-contrast;
+        image-rendering: crisp-edges;
+    }
+}
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+    /* Agregar soporte para dark mode en el futuro */
+}
+
+/* Accessibility: Reduce motion */
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
     }
 }
