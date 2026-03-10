@@ -80,35 +80,42 @@ class PDFGenerator:
                 background.paste(pil_img, mask=pil_img.split()[-1] if pil_img.mode in ('RGBA', 'LA') else None)
                 pil_img = background
             
-            # Calcular dimensiones manteniendo aspect ratio
-            img_width, img_height = pil_img.size
-            aspect_ratio = img_width / img_height
+            # Obtener dimensiones originales en píxeles
+            orig_width_px, orig_height_px = pil_img.size
+            aspect_ratio = orig_width_px / orig_height_px
             
-            if img_width > img_height:
-                # Imagen horizontal
-                new_width = min(max_width, img_width)
-                new_height = new_width / aspect_ratio
-                if new_height > max_height:
-                    new_height = max_height
-                    new_width = new_height * aspect_ratio
+            # Calcular dimensiones finales en puntos (para ReportLab)
+            if aspect_ratio > 1:
+                # Imagen horizontal: limitar por ancho
+                final_width_pt = max_width
+                final_height_pt = max_width / aspect_ratio
+                if final_height_pt > max_height:
+                    final_height_pt = max_height
+                    final_width_pt = max_height * aspect_ratio
             else:
-                # Imagen vertical
-                new_height = min(max_height, img_height)
-                new_width = new_height * aspect_ratio
-                if new_width > max_width:
-                    new_width = max_width
-                    new_height = new_width / aspect_ratio
+                # Imagen vertical: limitar por alto
+                final_height_pt = max_height
+                final_width_pt = max_height * aspect_ratio
+                if final_width_pt > max_width:
+                    final_width_pt = max_width
+                    final_height_pt = max_width / aspect_ratio
             
-            # Redimensionar imagen
-            pil_img = pil_img.resize((int(new_width * 72 / inch), int(new_height * 72 / inch)), PILImage.Resampling.LANCZOS)
+            # Redimensionar imagen PIL a tamaño razonable en píxeles
+            # Usar 2x el tamaño final para buena calidad (aproximadamente 144 DPI)
+            target_width_px = int(final_width_pt * 2)
+            target_height_px = int(final_height_pt * 2)
+            
+            # Solo redimensionar si la imagen es más grande que el objetivo
+            if orig_width_px > target_width_px or orig_height_px > target_height_px:
+                pil_img = pil_img.resize((target_width_px, target_height_px), PILImage.Resampling.LANCZOS)
             
             # Guardar en BytesIO
             img_buffer = BytesIO()
             pil_img.save(img_buffer, format='PNG')
             img_buffer.seek(0)
             
-            # Crear objeto Image de ReportLab con dimensiones exactas
-            return Image(img_buffer, width=new_width, height=new_height)
+            # Crear objeto Image de ReportLab con dimensiones exactas en puntos
+            return Image(img_buffer, width=final_width_pt, height=final_height_pt)
             
         except Exception as e:
             print(f"Error al cargar y redimensionar imagen: {e}")
