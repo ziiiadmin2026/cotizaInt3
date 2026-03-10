@@ -1,6 +1,5 @@
 import smtplib
 import os
-import base64
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from email.mime.application import MIMEApplication
@@ -15,6 +14,23 @@ class EmailSender:
         self.smtp_port = Config.SMTP_PORT
         self.email = Config.SMTP_EMAIL
         self.password = Config.SMTP_PASSWORD
+
+    def _credenciales_configuradas(self):
+        """Valida que las credenciales SMTP no sean placeholders."""
+        if not self.email or not self.password:
+            return False, "Configuración de email incompleta. Configure SMTP_EMAIL y SMTP_PASSWORD."
+
+        password_normalized = self.password.strip().lower()
+        placeholders = (
+            'tu_contraseña_smtp_aqui',
+            'tu_contrasena_smtp_aqui',
+            'smtp_password',
+            'changeme',
+        )
+        if any(value in password_normalized for value in placeholders):
+            return False, "SMTP_PASSWORD sigue configurado con un valor placeholder."
+
+        return True, "Configuración de email correcta"
     
     def enviar_cotizacion_email(self, destinatario, cotizacion_data, pdf_path=None, adjuntos=None):
         """
@@ -74,18 +90,21 @@ class EmailSender:
                         )
                         msg.attach(extra_attachment)
             
+            valido, mensaje = self._credenciales_configuradas()
+            if not valido:
+                print(f"[EMAIL ERROR] {mensaje}")
+                return False, mensaje
+
             # Enviar correo
             print(f"[EMAIL] Conectando al servidor SMTP...")
             with smtplib.SMTP(self.smtp_server, self.smtp_port, timeout=30) as server:
                 server.set_debuglevel(1)  # Activar debug
+                server.ehlo()
                 print(f"[EMAIL] Iniciando TLS...")
                 server.starttls()
+                server.ehlo()
                 print(f"[EMAIL] Autenticando...")
-                # Usar autenticación explícita para manejar caracteres especiales
-                # Codificar credenciales en UTF-8 y luego en base64 para SMTP AUTH
-                auth_string = f"\x00{self.email}\x00{self.password}".encode('utf-8')
-                auth_b64 = base64.b64encode(auth_string).decode('ascii')
-                server.docmd('AUTH', 'PLAIN ' + auth_b64)
+                server.login(self.email, self.password)
                 print(f"[EMAIL] Enviando mensaje...")
                 server.send_message(msg)
             
@@ -439,11 +458,18 @@ Soluciones tecnologicas integrales para tu negocio
             msg.attach(parte_texto)
             msg.attach(parte_html)
             
+            valido, mensaje = self._credenciales_configuradas()
+            if not valido:
+                print(f"[EMAIL] ✗ {mensaje}")
+                return False
+
             # Conectar y enviar
             print(f"[EMAIL] Conectando al servidor SMTP...")
             server = smtplib.SMTP(self.smtp_server, self.smtp_port)
+            server.ehlo()
             print(f"[EMAIL] Iniciando TLS...")
             server.starttls()
+            server.ehlo()
             print(f"[EMAIL] Autenticando...")
             server.login(self.email, self.password)
             print(f"[EMAIL] Enviando mensaje de confirmación...")
@@ -459,6 +485,4 @@ Soluciones tecnologicas integrales para tu negocio
 
     def verificar_configuracion(self):
         """Verificar si la configuración de email es válida"""
-        if not self.email or not self.password:
-            return False, "Configuración de email incompleta. Configure SMTP_EMAIL y SMTP_PASSWORD en el archivo .env"
-        return True, "Configuración de email correcta"
+        return self._credenciales_configuradas()

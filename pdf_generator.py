@@ -114,8 +114,14 @@ class PDFGenerator:
             pil_img.save(img_buffer, format='PNG')
             img_buffer.seek(0)
             
-            # Crear objeto Image de ReportLab con dimensiones exactas en puntos
-            return Image(img_buffer, width=final_width_pt, height=final_height_pt)
+            # Crear objeto Image de ReportLab con dimensiones exactas en puntos.
+            # Ajustar drawWidth/drawHeight explícitamente evita que ReportLab vuelva
+            # a tomar las dimensiones originales al calcular el layout de la tabla.
+            reportlab_img = Image(img_buffer)
+            reportlab_img.drawWidth = final_width_pt
+            reportlab_img.drawHeight = final_height_pt
+            reportlab_img._restrictSize(max_width, max_height)
+            return reportlab_img
             
         except Exception as e:
             print(f"Error al cargar y redimensionar imagen: {e}")
