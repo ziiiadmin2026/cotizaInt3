@@ -1,4 +1,5 @@
 import os
+import re
 import urllib.request
 from io import BytesIO
 from datetime import datetime
@@ -12,6 +13,7 @@ from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, 
 from reportlab.lib.enums import TA_CENTER, TA_RIGHT, TA_LEFT, TA_JUSTIFY
 from reportlab.pdfgen import canvas
 from reportlab.lib.utils import ImageReader
+from xml.sax.saxutils import escape
 from config import Config
 
 
@@ -71,6 +73,35 @@ class PDFGenerator:
             spaceAfter=12,
             spaceBefore=12
         ))
+
+        self.styles.add(ParagraphStyle(
+            name='ProductCell',
+            parent=self.styles['Normal'],
+            fontSize=8,
+            leading=10,
+            wordWrap='CJK',
+        ))
+
+    def _split_long_token(self, text, chunk_size=24):
+        """Inserta espacios en tokens muy largos para permitir saltos de línea."""
+        if len(text) <= chunk_size:
+            return text
+        return ' '.join(text[i:i + chunk_size] for i in range(0, len(text), chunk_size))
+
+    def _format_product_text(self, product_name, description, max_description_chars=220):
+        """Genera texto seguro y acotado para la celda de producto."""
+        safe_name = escape((product_name or 'N/A').strip())
+
+        raw_description = re.sub(r'\s+', ' ', (description or '').strip())
+        if len(raw_description) > max_description_chars:
+            raw_description = raw_description[:max_description_chars - 3].rstrip() + '...'
+
+        safe_description = escape(raw_description)
+        safe_description = ' '.join(self._split_long_token(token) for token in safe_description.split(' '))
+
+        if safe_description:
+            return f"<b>{safe_name}</b><br/><font size=7>{safe_description}</font>"
+        return f"<b>{safe_name}</b>"
     
     def _load_and_resize_image(self, image_source, max_width=0.6*inch, max_height=0.6*inch):
         """
@@ -325,11 +356,7 @@ class PDFGenerator:
             # Descripción del producto
             descripcion = item.get('descripcion', '')
             
-            # Formato del producto: nombre en bold y descripción debajo
-            if descripcion:
-                producto_text = f"<b>{producto_nombre}</b><br/><font size=8>{descripcion}</font>"
-            else:
-                producto_text = f"<b>{producto_nombre}</b>"
+            producto_text = self._format_product_text(producto_nombre, descripcion)
             
             # Imagen del producto (thumbnail)
             imagen_cell = ''
@@ -363,7 +390,7 @@ class PDFGenerator:
             table_data.append([
                 imagen_cell,
                 Paragraph(f'<font size=9><b>{codigo}</b></font>', self.styles['Normal']),
-                Paragraph(producto_text, self.styles['Normal']),
+                Paragraph(producto_text, self.styles['ProductCell']),
                 str(item['cantidad']),
                 f"${item['precio_unitario']:,.2f}",
                 f"${item['subtotal']:,.2f}"
