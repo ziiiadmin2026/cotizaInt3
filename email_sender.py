@@ -1,5 +1,6 @@
 import smtplib
 import os
+import base64
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from email.mime.application import MIMEApplication
@@ -80,7 +81,11 @@ class EmailSender:
                 print(f"[EMAIL] Iniciando TLS...")
                 server.starttls()
                 print(f"[EMAIL] Autenticando...")
-                server.login(self.email, self.password)
+                # Usar autenticación explícita para manejar caracteres especiales
+                # Codificar credenciales en UTF-8 y luego en base64 para SMTP AUTH
+                auth_string = f"\x00{self.email}\x00{self.password}".encode('utf-8')
+                auth_b64 = base64.b64encode(auth_string).decode('ascii')
+                server.docmd('AUTH', 'PLAIN ' + auth_b64)
                 print(f"[EMAIL] Enviando mensaje...")
                 server.send_message(msg)
             
