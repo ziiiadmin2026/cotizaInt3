@@ -8,10 +8,37 @@ from reportlab.lib import colors
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image, PageBreak
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image, PageBreak, Flowable
 from reportlab.lib.enums import TA_CENTER, TA_RIGHT, TA_LEFT, TA_JUSTIFY
 from reportlab.pdfgen import canvas
+from reportlab.lib.utils import ImageReader
 from config import Config
+
+
+class FixedSizeImage(Flowable):
+    """Flowable de imagen con tamaño fijo para uso seguro dentro de tablas."""
+
+    def __init__(self, image_source, width, height):
+        super().__init__()
+        self.width = width
+        self.height = height
+        self.image_reader = ImageReader(image_source)
+        self.drawWidth = width
+        self.drawHeight = height
+
+    def wrap(self, availWidth, availHeight):
+        return self.width, self.height
+
+    def draw(self):
+        self.canv.drawImage(
+            self.image_reader,
+            0,
+            0,
+            width=self.width,
+            height=self.height,
+            preserveAspectRatio=True,
+            mask='auto'
+        )
 
 class PDFGenerator:
     """Generador de PDFs para cotizaciones"""
@@ -114,14 +141,9 @@ class PDFGenerator:
             pil_img.save(img_buffer, format='PNG')
             img_buffer.seek(0)
             
-            # Crear objeto Image de ReportLab con dimensiones exactas en puntos.
-            # Ajustar drawWidth/drawHeight explícitamente evita que ReportLab vuelva
-            # a tomar las dimensiones originales al calcular el layout de la tabla.
-            reportlab_img = Image(img_buffer)
-            reportlab_img.drawWidth = final_width_pt
-            reportlab_img.drawHeight = final_height_pt
-            reportlab_img._restrictSize(max_width, max_height)
-            return reportlab_img
+            # Usar un flowable de tamaño fijo evita que ReportLab reinterprete
+            # las dimensiones originales al partir la tabla entre páginas.
+            return FixedSizeImage(img_buffer, final_width_pt, final_height_pt)
             
         except Exception as e:
             print(f"Error al cargar y redimensionar imagen: {e}")
