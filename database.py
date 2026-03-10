@@ -222,6 +222,26 @@ class Database:
         
         conn.close()
         return dict(cliente) if cliente else None
+
+    def eliminar_cliente(self, cliente_id):
+        """Eliminar un cliente si no tiene cotizaciones asociadas"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute('SELECT COUNT(*) as total FROM cotizaciones WHERE cliente_id = ?', (cliente_id,))
+        total_cotizaciones = cursor.fetchone()['total']
+
+        if total_cotizaciones > 0:
+            conn.close()
+            raise ValueError('No se puede eliminar el cliente porque tiene cotizaciones asociadas')
+
+        cursor.execute('DELETE FROM clientes WHERE id = ?', (cliente_id,))
+        deleted = cursor.rowcount > 0
+
+        conn.commit()
+        conn.close()
+
+        return deleted
     
     def crear_cotizacion(self, cliente_id, items, fecha_validez=None, notas='', condiciones_comerciales='', iva_porcentaje=16, creado_por=None):
         """Crear una nueva cotización con sus items"""
@@ -409,6 +429,21 @@ class Database:
         conn.close()
         
         return True
+
+    def eliminar_cotizacion(self, cotizacion_id):
+        """Eliminar una cotización y sus registros relacionados"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute('DELETE FROM cotizacion_adjuntos WHERE cotizacion_id = ?', (cotizacion_id,))
+        cursor.execute('DELETE FROM cotizacion_items WHERE cotizacion_id = ?', (cotizacion_id,))
+        cursor.execute('DELETE FROM cotizaciones WHERE id = ?', (cotizacion_id,))
+        deleted = cursor.rowcount > 0
+
+        conn.commit()
+        conn.close()
+
+        return deleted
     
     # ==========================================
     # FUNCIONES DE AUTENTICACIÓN Y USUARIOS

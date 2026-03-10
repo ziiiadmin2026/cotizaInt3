@@ -185,7 +185,8 @@ def clientes():
                 'message': f'Error al crear cliente: {str(e)}'
             }), 400
 
-@app.route('/api/clientes/<int:cliente_id>', methods=['GET', 'PUT'])
+@app.route('/api/clientes/<int:cliente_id>', methods=['GET', 'PUT', 'DELETE'])
+@login_required
 def obtener_cliente(cliente_id):
     """Obtener o actualizar un cliente específico"""
     if request.method == 'GET':
@@ -218,6 +219,31 @@ def obtener_cliente(cliente_id):
                     'success': False,
                     'message': 'No se pudo actualizar el cliente'
                 }), 400
+        except Exception as e:
+            return jsonify({
+                'success': False,
+                'message': f'Error: {str(e)}'
+            }), 400
+
+    elif request.method == 'DELETE':
+        try:
+            resultado = db.eliminar_cliente(cliente_id)
+
+            if resultado:
+                return jsonify({
+                    'success': True,
+                    'message': 'Cliente eliminado correctamente'
+                })
+
+            return jsonify({
+                'success': False,
+                'message': 'Cliente no encontrado'
+            }), 404
+        except ValueError as e:
+            return jsonify({
+                'success': False,
+                'message': str(e)
+            }), 400
         except Exception as e:
             return jsonify({
                 'success': False,
@@ -261,7 +287,7 @@ def cotizaciones():
                 'message': f'Error al crear cotización: {str(e)}'
             }), 400
 
-@app.route('/api/cotizaciones/<int:cotizacion_id>', methods=['GET', 'PUT'])
+@app.route('/api/cotizaciones/<int:cotizacion_id>', methods=['GET', 'PUT', 'DELETE'])
 @login_required
 def obtener_cotizacion(cotizacion_id):
     """Obtener o actualizar una cotización específica"""
@@ -297,6 +323,26 @@ def obtener_cotizacion(cotizacion_id):
             return jsonify({
                 'success': False,
                 'message': f'Error al actualizar cotización: {str(e)}'
+            }), 400
+
+    elif request.method == 'DELETE':
+        try:
+            resultado = db.eliminar_cotizacion(cotizacion_id)
+
+            if resultado:
+                return jsonify({
+                    'success': True,
+                    'message': 'Cotización eliminada exitosamente'
+                }), 200
+
+            return jsonify({
+                'success': False,
+                'message': 'Cotización no encontrada'
+            }), 404
+        except Exception as e:
+            return jsonify({
+                'success': False,
+                'message': f'Error al eliminar cotización: {str(e)}'
             }), 400
 
 @app.route('/api/cotizaciones/<int:cotizacion_id>/adjuntos', methods=['POST'])

@@ -203,6 +203,7 @@ async function cargarClientes() {
                 <td>${cliente.rfc || 'N/A'}</td>
                 <td>
                     <button class="btn btn-small btn-primary" onclick="editarCliente(${cliente.id})">Editar</button>
+                    <button class="btn btn-small btn-danger" onclick="eliminarCliente(${cliente.id})">Eliminar</button>
                 </td>
             </tr>
         `).join('');
@@ -286,6 +287,34 @@ async function crearCliente(e) {
     }
 }
 
+async function eliminarCliente(clienteId) {
+    const cliente = clientes.find(item => item.id === clienteId);
+    const nombreCliente = cliente ? cliente.nombre : `ID ${clienteId}`;
+
+    if (!confirm(`¿Estás seguro de que deseas eliminar al cliente \"${nombreCliente}\"?`)) {
+        return;
+    }
+
+    try {
+        const response = await fetch(`/api/clientes/${clienteId}`, {
+            method: 'DELETE'
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            showNotification('Cliente eliminado correctamente', 'success');
+            cargarClientes();
+            cargarCotizaciones();
+        } else {
+            showNotification(result.message || 'Error al eliminar cliente', 'error');
+        }
+    } catch (error) {
+        console.error('Error al eliminar cliente:', error);
+        showNotification('Error al eliminar cliente', 'error');
+    }
+}
+
 // Gestión de Cotizaciones
 async function cargarCotizaciones() {
     try {
@@ -328,6 +357,7 @@ async function cargarCotizaciones() {
                     <button class="btn btn-warning btn-sm" onclick="editarCotizacion(${cot.id})">Editar</button>
                     <button class="btn btn-success btn-sm" onclick="descargarPDF(${cot.id})">PDF</button>
                     <button class="btn btn-secondary btn-sm" onclick="enviarEmail(${cot.id})">Email</button>
+                    <button class="btn btn-danger btn-sm" onclick="eliminarCotizacion(${cot.id})">Eliminar</button>
                 </td>
             </tr>
             `;
@@ -578,6 +608,33 @@ async function editarCotizacion(cotizacionId) {
     } catch (error) {
         console.error('Error al editar cotización:', error);
         showNotification('Error al cargar cotización: ' + error.message, 'error');
+    }
+}
+
+async function eliminarCotizacion(cotizacionId) {
+    const cotizacion = cotizaciones.find(item => item.id === cotizacionId);
+    const numeroCotizacion = cotizacion ? cotizacion.numero_cotizacion : `ID ${cotizacionId}`;
+
+    if (!confirm(`¿Estás seguro de que deseas eliminar la cotización \"${numeroCotizacion}\"?`)) {
+        return;
+    }
+
+    try {
+        const response = await fetch(`/api/cotizaciones/${cotizacionId}`, {
+            method: 'DELETE'
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            showNotification('Cotización eliminada correctamente', 'success');
+            cargarCotizaciones();
+        } else {
+            showNotification(result.message || 'Error al eliminar cotización', 'error');
+        }
+    } catch (error) {
+        console.error('Error al eliminar cotización:', error);
+        showNotification('Error al eliminar cotización', 'error');
     }
 }
 
