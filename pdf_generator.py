@@ -3,6 +3,7 @@ import urllib.request
 from io import BytesIO
 from datetime import datetime
 import pytz
+from PIL import Image as PILImage
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
@@ -43,6 +44,75 @@ class PDFGenerator:
             spaceAfter=12,
             spaceBefore=12
         ))
+    
+    def _load_and_resize_image(self, image_source, max_width=0.6*inch, max_height=0.6*inch):
+        """
+        Carga y redimensiona una imagen manteniendo el aspect ratio
+        
+        Args:
+            image_source: Ruta local, URL o BytesIO
+            max_width: Ancho máximo en puntos
+            max_height: Alto máximo en puntos
+            
+        Returns:
+            Objeto Image de ReportLab o None si falla
+        """
+        try:
+            # Cargar imagen con PIL
+            if isinstance(image_source, str):
+                if image_source.startswith('http://') or image_source.startswith('https://'):
+                    # URL web
+                    img_data = BytesIO(urllib.request.urlopen(image_source).read())
+                    pil_img = PILImage.open(img_data)
+                else:
+                    # Ruta local
+                    pil_img = PILImage.open(image_source)
+            elif isinstance(image_source, BytesIO):
+                pil_img = PILImage.open(image_source)
+            else:
+                return None
+            
+            # Convertir a RGB si es necesario (para PNG con transparencia)
+            if pil_img.mode in ('RGBA', 'LA', 'P'):
+                background = PILImage.new('RGB', pil_img.size, (255, 255, 255))
+                if pil_img.mode == 'P':
+                    pil_img = pil_img.convert('RGBA')
+                background.paste(pil_img, mask=pil_img.split()[-1] if pil_img.mode in ('RGBA', 'LA') else None)
+                pil_img = background
+            
+            # Calcular dimensiones manteniendo aspect ratio
+            img_width, img_height = pil_img.size
+            aspect_ratio = img_width / img_height
+            
+            if img_width > img_height:
+                # Imagen horizontal
+                new_width = min(max_width, img_width)
+                new_height = new_width / aspect_ratio
+                if new_height > max_height:
+                    new_height = max_height
+                    new_width = new_height * aspect_ratio
+            else:
+                # Imagen vertical
+                new_height = min(max_height, img_height)
+                new_width = new_height * aspect_ratio
+                if new_width > max_width:
+                    new_width = max_width
+                    new_height = new_width / aspect_ratio
+            
+            # Redimensionar imagen
+            pil_img = pil_img.resize((int(new_width * 72 / inch), int(new_height * 72 / inch)), PILImage.Resampling.LANCZOS)
+            
+            # Guardar en BytesIO
+            img_buffer = BytesIO()
+            pil_img.save(img_buffer, format='PNG')
+            img_buffer.seek(0)
+            
+            # Crear objeto Image de ReportLab con dimensiones exactas
+            return Image(img_buffer, width=new_width, height=new_height)
+            
+        except Exception as e:
+            print(f"Error al cargar y redimensionar imagen: {e}")
+            return None
     
     def generar_cotizacion_pdf(self, cotizacion_data, filename=None):
         """
@@ -231,23 +301,24 @@ class PDFGenerator:
             imagen_url = item.get('producto_imagen')
             if imagen_url:
                 try:
+                    img = None
                     # Si es URL web
                     if imagen_url.startswith('http://') or imagen_url.startswith('https://'):
-                        img_data = BytesIO(urllib.request.urlopen(imagen_url).read())
-                        img = Image(img_data, width=0.6*inch, height=0.6*inch)
+                        img = self._load_and_resize_image(imagen_url)
                     # Si es ruta relativa /uploads/...
                     elif imagen_url.startswith('/uploads/'):
                         ruta_local = imagen_url.lstrip('/').replace('/', os.sep)
                         if os.path.exists(ruta_local):
-                            img = Image(ruta_local, width=0.6*inch, height=0.6*inch)
-                        else:
-                            img = Paragraph('<font size=6>N/A</font>', self.styles['Normal'])
+                            img = self._load_and_resize_image(ruta_local)
                     # Si es ruta local directa
                     elif os.path.exists(imagen_url):
-                        img = Image(imagen_url, width=0.6*inch, height=0.6*inch)
+                        img = self._load_and_resize_image(imagen_url)
+                    
+                    # Usar la imagen si se cargó correctamente, sino usar texto
+                    if img:
+                        imagen_cell = img
                     else:
-                        img = Paragraph('<font size=6>Sin img</font>', self.styles['Normal'])
-                    imagen_cell = img
+                        imagen_cell = Paragraph('<font size=6>Sin img</font>', self.styles['Normal'])
                 except Exception as e:
                     print(f"Error al cargar imagen: {e}")
                     imagen_cell = Paragraph('<font size=6>N/A</font>', self.styles['Normal'])
